@@ -537,12 +537,11 @@
   let lastPackageSendTimestamp = -1;
   let globalImageLoader = null;
   let globalRoomUsernames = [];
-  const WS_PORT = 8020;
   const FORCED_LATENCY = 30;
   async function initConnection() {
     isLoading = true;
     updateUI();
-    socket = new WebSocket(`ws://localhost:${WS_PORT}`);
+    socket = new WebSocket(window.SOCKET_ADDRESS);
     socket.onopen = () => {
       console.log("Connected to server");
       sendWelcome();
