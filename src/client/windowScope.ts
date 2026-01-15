@@ -6,5 +6,4 @@ declare global {
 	}
 }
 
-window.SOCKET_ADDRESS = "";
 

@@ -5,6 +5,7 @@ import { SERVER_IDS } from "../net/SERVER_IDS";
 import { ClientGameEngine } from "./ClientGameEngine";
 import { ImageLoader } from "./ImageLoader";
 import { CLIENT_DESCRIPTIONS } from "./clientGameList";
+import {} from "./windowScope"
 
 
 let socket: WebSocket | null = null;
@@ -20,7 +21,6 @@ let animationFrameId: number | null = null;
 let lastPackageSendTimestamp = -1;
 let globalImageLoader: ImageLoader | null = null;
 let globalRoomUsernames: string[] = [];
-const WS_PORT = 8020;
 const FORCED_LATENCY = 30;
 
 // Initialize connection with loading delay
@@ -29,7 +29,7 @@ async function initConnection() {
 	// Show loading state
 	updateUI();
 		
-	socket = new WebSocket(`ws://localhost:${WS_PORT}`);
+	socket = new WebSocket(window.SOCKET_ADDRESS);
 	
 	socket.onopen = () => {
 		console.log("Connected to server");
