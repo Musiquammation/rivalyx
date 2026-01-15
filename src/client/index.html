@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Mobile Game</title>
+
+	<link rel="stylesheet" href="index.css">
+</head>
+<body>
+	<div id="loading" style="display: none;">
+		<p>Chargement...</p>
+	</div>
+
+	<div id="buttons" style="display: none;">
+		<button id="createLobbyBtn">Créer un lobby</button>
+		<button id="joinLobbyBtn">Rejoindre un lobby</button>
+	</div>
+
+	<div id="gameMenu">
+		<div id="gameMenuContent">
+			<h2 id="gameMenuTitle">Choisir un jeu</h2>
+			<div id="gameList"></div>
+			<button id="gameMenuCancel">Annuler</button>
+		</div>
+	</div>
+
+	<div id="waitingMenu">
+		<div id="waitingMenuContent">
+			<h2 id="waitingMenuTitle">En attente de joueurs</h2>
+			<div id="waitingMenuLobbyId">
+				<span class="lobbyIdText">?</span>
+				<button id="copyLobbyIdBtn" class="copyBtn" title="Copier l'ID du lobby">📋</button>
+			</div>
+			<div id="waitingMenuPlayers">? joueurs connectés sur ?</div>
+		</div>
+	</div>
+
+	<div id="endGameMenu">
+		<div id="endGameMenuContent">
+			<h2 id="endGameMenuTitle">Fin de partie</h2>
+			<div id="endGamePlayerPosition">?</div>
+			<div id="endGameLeaderboard"></div>
+			<button id="endGameMenuBtn">Retour au menu principal</button>
+		</div>
+	</div>
+
+	<canvas id="gameCanvas" style="display: none;"></canvas>
+
+	<script type="module" src="./index.ts"></script>
+</body>
+</html>
