@@ -1,3 +1,5 @@
 node_modules/
 draft/
 .env
+dist/
+vite.client.config.ts

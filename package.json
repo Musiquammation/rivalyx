@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server/serv.ts",
-    "build": "tsc",
+    "buildClient": "vite build --config vite.client.config.ts",
     "start": "node dist/server/serv.js",
     "client": "vite src/client"
   },
@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "crypto": "^1.0.1",
     "dotenv": "^17.2.3",
     "ws": "^8.19.0"
   },
