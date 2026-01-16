@@ -3,3 +3,5 @@ draft/
 .env
 dist/
 vite.client.config.ts
+cert.pem
+key.pem
