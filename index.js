@@ -254,13 +254,18 @@
     JoystickPlacement2[JoystickPlacement2["GAME_RATIO"] = 2] = "GAME_RATIO";
     return JoystickPlacement2;
   })(JoystickPlacement || {});
+  const JOYSTICK_COLORS = {
+    blue: { base: [35, 65, 165], stick: [65, 99, 208] },
+    red: { base: [148, 45, 45], stick: [208, 65, 65] }
+  };
   class Joystick {
-    constructor(x, y, xpl, ypl, label, radius = 32) {
+    constructor(x, y, xpl, ypl, color, label, radius = 32) {
       this.x = x;
       this.y = y;
       this.xpl = xpl;
       this.ypl = ypl;
       this.label = label;
+      this.color = color;
       this.radius = radius;
       this.activeTouchId = void 0;
       this.stickX = 0;
@@ -277,19 +282,19 @@
       this.imageLoader = imageLoader;
     }
     drawGame(ctx) {
-      const gameSize = this.getGameSize();
-      const screenWidth = this.canvas.width;
-      const screenHeight = this.canvas.height;
-      const scaleX = screenWidth / gameSize.width;
-      const scaleY = screenHeight / gameSize.height;
-      const scale = Math.min(scaleX, scaleY);
-      const offsetX = (screenWidth - gameSize.width * scale) / 2;
-      const offsetY = (screenHeight - gameSize.height * scale) / 2;
-      ctx.save();
-      ctx.translate(offsetX, offsetY);
-      ctx.scale(scale, scale);
-      this.draw(ctx);
-      ctx.restore();
+      const applyToScreen = () => {
+        const gameSize = this.getGameSize();
+        const screenWidth = this.canvas.width;
+        const screenHeight = this.canvas.height;
+        const scaleX = screenWidth / gameSize.width;
+        const scaleY = screenHeight / gameSize.height;
+        const scale = Math.min(scaleX, scaleY);
+        const offsetX = (screenWidth - gameSize.width * scale) / 2;
+        const offsetY = (screenHeight - gameSize.height * scale) / 2;
+        ctx.translate(offsetX, offsetY);
+        ctx.scale(scale, scale);
+      };
+      this.draw(ctx, this.canvas.width, this.canvas.height, applyToScreen);
     }
     setCanvas(canvas) {
       this.canvas = canvas;
@@ -301,12 +306,28 @@
       const screenHeight = window.innerHeight;
       const canvasWidth = this.canvas.width;
       const canvasHeight = this.canvas.height;
-      event.preventDefault();
+      let shouldPreventDefault = true;
+      for (let i = 0; i < event.changedTouches.length; i++) {
+        const touch = event.changedTouches[i];
+        const element = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (element && (element.tagName === "BUTTON" || element.tagName === "A" || element.closest("button") || element.closest("a"))) {
+          shouldPreventDefault = false;
+          break;
+        }
+      }
+      if (shouldPreventDefault) {
+        event.preventDefault();
+      }
       for (let i = 0; i < event.changedTouches.length; i++) {
         const touch = event.changedTouches[i];
         const clientX = touch.clientX;
         const clientY = touch.clientY;
         const touchId = touch.identifier;
+        const element = document.elementFromPoint(clientX, clientY);
+        const isInteractiveElement = element && (element.tagName === "BUTTON" || element.tagName === "A" || element.closest("button") || element.closest("a"));
+        if (isInteractiveElement) {
+          continue;
+        }
         if (kind === "touchstart") {
           let closestJoystick = null;
           let minDistance = Infinity;
@@ -419,12 +440,12 @@
         const radius = joystick.radius;
         const stickX = joystick.stickX;
         const stickY = joystick.stickY;
-        ctx.fillStyle = "rgba(100, 100, 100, 0.5)";
+        ctx.fillStyle = `rgba(${joystick.color.base[0]}, ${joystick.color.base[1]}, ${joystick.color.base[2]}, 0.5)`;
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
         ctx.fill();
         const stickRadius = radius * 0.4;
-        ctx.fillStyle = "rgba(150, 150, 150, 0.8)";
+        ctx.fillStyle = `rgba(${joystick.color.stick[0]}, ${joystick.color.stick[1]}, ${joystick.color.stick[2]}, 0.8)`;
         ctx.beginPath();
         ctx.arc(pos.x + stickX * radius * 0.6, pos.y + stickY * radius * 0.6, stickRadius, 0, Math.PI * 2);
         ctx.fill();
@@ -450,13 +471,28 @@
       ];
     }
     async start() {
-      super.appendJoystick(new Joystick(0.9, 0.9, JoystickPlacement.SCREEN_RATIO, JoystickPlacement.SCREEN_RATIO, "move"));
+      super.appendJoystick(new Joystick(
+        0.9,
+        0.9,
+        JoystickPlacement.SCREEN_RATIO,
+        JoystickPlacement.SCREEN_RATIO,
+        this.playerIndex === 0 ? JOYSTICK_COLORS.red : JOYSTICK_COLORS.blue,
+        "move"
+      ));
       this.tiles.fill(255);
     }
     getGameSize() {
       return { width: 1080, height: 2400 };
     }
-    draw(ctx) {
+    draw(ctx, screenWidth, screenHeight, applyToScreen) {
+      if (this.playerIndex === 0) {
+        ctx.fillStyle = "rgb(98, 25, 25)";
+      } else {
+        ctx.fillStyle = "rgb(25, 39, 98)";
+      }
+      ctx.fillRect(0, 0, screenWidth, screenHeight);
+      ctx.save();
+      applyToScreen();
       const floorImg = this.imageLoader.getImage("floor");
       let tile = 0;
       for (let y = 0; y < _GClientPackice.TILES_Y; y++) {
@@ -469,17 +505,25 @@
           tile++;
         }
       }
-      const playerImg = this.imageLoader.getImage("player");
-      for (const player of this.players) {
+      const imagesNames = ["playerRed", "playerBlue"];
+      for (let i = 0; i < 2; i++) {
+        const player = this.players[i];
         const px = player.x;
         const py = player.y;
         const size = 100;
         ctx.save();
         ctx.translate(px, py);
         ctx.rotate(player.dir);
-        ctx.drawImage(playerImg, -50, -50, size, size);
+        ctx.drawImage(
+          this.imageLoader.getImage(imagesNames[i]),
+          -50,
+          -50,
+          size,
+          size
+        );
         ctx.restore();
       }
+      ctx.restore();
     }
     clientNetwork(reader) {
       if (reader) {
@@ -509,7 +553,8 @@
     }
   };
   _GClientPackice.IMAGES = {
-    player: "/assets/gpackice/player.svg",
+    playerRed: "/assets/gpackice/player-red.svg",
+    playerBlue: "/assets/gpackice/player-blue.svg",
     floor: "/assets/gpackice/floor.svg"
   };
   _GClientPackice.TILES_X = 9;
@@ -537,7 +582,6 @@
   let lastPackageSendTimestamp = -1;
   let globalImageLoader = null;
   let globalRoomUsernames = [];
-  const FORCED_LATENCY = 30;
   async function initConnection() {
     isLoading = true;
     updateUI();
@@ -646,7 +690,7 @@
     if (!globalGameEngine)
       return;
     const now = Date.now();
-    const diff = FORCED_LATENCY - (now - lastPackageSendTimestamp);
+    const diff = window.FORCED_LATENCY - (now - lastPackageSendTimestamp);
     const bufferToSend = globalGameEngine.clientNetwork(reader).toArrayBuffer();
     if (diff >= 0) {
       setTimeout(() => {
