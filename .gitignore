@@ -3,5 +3,5 @@ draft/
 .env
 dist/
 vite.client.config.ts
-cert.pem
-key.pem
+/etc/letsencrypt/live/villager-studio.online/privkey.pem
+/etc/letsencrypt/live/villager-studio.online/fullchain.pem

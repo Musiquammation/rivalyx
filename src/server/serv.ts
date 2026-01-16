@@ -26,10 +26,15 @@ if (Number(process.env.USE_HTTPS) === 0) {
 		res.writeHead(200);
 	});
 } else {
+	if (process.env.SSL_KEY_PATH === undefined || process.env.SSL_CERT_PATH === undefined) {
+		throw new Error("SSL_KEY_PATH and/or SSL_CERT_PATH are not defined");
+	}
+
 	const options = {
-		key: fs.readFileSync('path/to/private.key'),
-		cert: fs.readFileSync('path/to/certificate.crt')
+		key: fs.readFileSync(process.env.SSL_KEY_PATH),
+		cert: fs.readFileSync(process.env.SSL_CERT_PATH)
 	};
+	
 	server = https.createServer(options, (req, res) => {
 		res.writeHead(200);
 	});
