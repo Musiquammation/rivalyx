@@ -1,5 +1,5 @@
 import { SHARED_DESCRIPTIONS, SharedGameDescription } from "../gameDescriptions";
-import { GServPackice } from "../games/gpackice/GServTest";
+import { GServPackice } from "../games/gpackice/GServPackice";
 
 import { ServerGameEngine } from "./ServerGameEngine";
 

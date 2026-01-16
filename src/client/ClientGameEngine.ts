@@ -9,6 +9,17 @@ export enum JoystickPlacement {
 	GAME_RATIO
 }
 
+export interface JoystickColor {
+	base: number[];
+	stick: number[];
+}
+
+
+export const JOYSTICK_COLORS: {[key: string]: JoystickColor} = {
+	blue: {base: [35, 65, 165], stick: [65, 99, 208]},
+	red:  {base: [148, 45, 45], stick: [208, 65, 65]}
+};
+
 
 export class Joystick {
 	x: number;
@@ -17,6 +28,7 @@ export class Joystick {
 	ypl: JoystickPlacement;
 	radius: number;
 	label: string;
+	color: JoystickColor;
 
 	activeTouchId?: number;
 	stickX: number;
@@ -31,6 +43,7 @@ export class Joystick {
 		y: number,
 		xpl: JoystickPlacement,
 		ypl: JoystickPlacement,
+		color: JoystickColor,
 		label: string,
 		radius: number = 32
 	) {
@@ -39,6 +52,7 @@ export class Joystick {
 		this.xpl = xpl;
 		this.ypl = ypl;
 		this.label = label;
+		this.color = color;
 		this.radius = radius;
 
 		this.activeTouchId = undefined;
@@ -63,32 +77,32 @@ export abstract class ClientGameEngine {
 
 	abstract start(): void;
 	abstract getGameSize(): {width: number, height: number};
-	protected abstract draw(ctx: CanvasRenderingContext2D): void;
+	protected abstract draw(
+		ctx: CanvasRenderingContext2D,
+		screenWidth: number,
+		screenHeight: number,
+		applyToScreen: ()=>void
+	): void;
 
 	drawGame(ctx: CanvasRenderingContext2D) {
-		const gameSize = this.getGameSize();
-		const screenWidth = this.canvas!.width;
-		const screenHeight = this.canvas!.height;
+		const applyToScreen = () => {
+			const gameSize = this.getGameSize();
+			const screenWidth = this.canvas!.width;
+			const screenHeight = this.canvas!.height;
+	
+			const scaleX = screenWidth / gameSize.width;
+			const scaleY = screenHeight / gameSize.height;
+	
+			const scale = Math.min(scaleX, scaleY);
+	
+			const offsetX = (screenWidth - gameSize.width * scale) / 2;
+			const offsetY = (screenHeight - gameSize.height * scale) / 2;
+			ctx.translate(offsetX, offsetY);
+			ctx.scale(scale, scale);
+		};
 
-		const scaleX = screenWidth / gameSize.width;
-		const scaleY = screenHeight / gameSize.height;
-
-		// Choisir le scale qui "remplit au max" sans déformer
-		const scale = Math.min(scaleX, scaleY); // ok, on crop si nécessaire
-
-		// Calcul des offsets pour centrer le jeu sur le canvas
-		const offsetX = (screenWidth - gameSize.width * scale) / 2;
-		const offsetY = (screenHeight - gameSize.height * scale) / 2;
-
-		// Appliquer la transformation
-		ctx.save();
-		ctx.translate(offsetX, offsetY);
-		ctx.scale(scale, scale);
-
-		this.draw(ctx);
 		
-		ctx.restore();
-
+		this.draw(ctx, this.canvas!.width, this.canvas!.height, applyToScreen);
 	}
 	
 	abstract clientNetwork(reader: DataReader | null): DataWriter;
@@ -106,13 +120,48 @@ export abstract class ClientGameEngine {
 		const canvasWidth = this.canvas.width;
 		const canvasHeight = this.canvas.height;
 
-		event.preventDefault();
+		// Check if any touch is on an interactive element (button, link, etc.)
+		let shouldPreventDefault = true;
+		for (let i = 0; i < event.changedTouches.length; i++) {
+			const touch = event.changedTouches[i];
+			const element = document.elementFromPoint(touch.clientX, touch.clientY);
+			
+			// If touch is on an interactive element, don't prevent default
+			if (element && (
+				element.tagName === 'BUTTON' ||
+				element.tagName === 'A' ||
+				element.closest('button') ||
+				element.closest('a')
+			)) {
+				shouldPreventDefault = false;
+				break;
+			}
+		}
+
+		// Only prevent default if touch is not on an interactive element
+		if (shouldPreventDefault) {
+			event.preventDefault();
+		}
 
 		for (let i = 0; i < event.changedTouches.length; i++) {
 			const touch = event.changedTouches[i];
 			const clientX = touch.clientX;
 			const clientY = touch.clientY;
 			const touchId = touch.identifier;
+
+			// Check if touch is on an interactive element
+			const element = document.elementFromPoint(clientX, clientY);
+			const isInteractiveElement = element && (
+				element.tagName === 'BUTTON' ||
+				element.tagName === 'A' ||
+				element.closest('button') ||
+				element.closest('a')
+			);
+
+			// Skip joystick handling if touch is on an interactive element
+			if (isInteractiveElement) {
+				continue;
+			}
 
 			if (kind === 'touchstart') {
 				// Find the closest joystick
@@ -242,7 +291,6 @@ export abstract class ClientGameEngine {
 	}
 
 	drawJoysticks(ctx: CanvasRenderingContext2D) {
-
 		if (!this.canvas) return;
 		
 		const screenWidth = window.innerWidth;
@@ -260,14 +308,14 @@ export abstract class ClientGameEngine {
 			const stickY = joystick.stickY;
 
 			// Draw joystick base
-			ctx.fillStyle = 'rgba(100, 100, 100, 0.5)';
+			ctx.fillStyle = `rgba(${joystick.color.base[0]}, ${joystick.color.base[1]}, ${joystick.color.base[2]}, 0.5)`;
 			ctx.beginPath();
 			ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
 			ctx.fill();
 
 			// Draw joystick stick
 			const stickRadius = radius * 0.4;
-			ctx.fillStyle = 'rgba(150, 150, 150, 0.8)';
+			ctx.fillStyle = `rgba(${joystick.color.stick[0]}, ${joystick.color.stick[1]}, ${joystick.color.stick[2]}, 0.8)`;
 			ctx.beginPath();
 			ctx.arc(pos.x + stickX * radius * 0.6, pos.y + stickY * radius * 0.6, stickRadius, 0, Math.PI * 2);
 			ctx.fill();

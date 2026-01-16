@@ -1,4 +1,4 @@
-import { ClientGameEngine, Joystick, JoystickPlacement } from "../../client/ClientGameEngine";
+import { ClientGameEngine, Joystick, JOYSTICK_COLORS, JoystickPlacement } from "../../client/ClientGameEngine";
 import { ImageLoader } from "../../client/ImageLoader";
 import { DataReader } from "../../net/DataReader";
 import { DataWriter } from "../../net/DataWriter";
@@ -23,7 +23,8 @@ class Player {
 
 export class GClientPackice extends ClientGameEngine {
 	static IMAGES: StringMap = {
-		player: "/assets/gpackice/player.svg",
+		playerRed: "/assets/gpackice/player-red.svg",
+		playerBlue: "/assets/gpackice/player-blue.svg",
 		floor: "/assets/gpackice/floor.svg",
 	};
 
@@ -41,7 +42,12 @@ export class GClientPackice extends ClientGameEngine {
 	}
 
 	async start() {
-		super.appendJoystick(new Joystick(0.9, 0.9, JoystickPlacement.SCREEN_RATIO, JoystickPlacement.SCREEN_RATIO, "move"));
+		super.appendJoystick(new Joystick(
+			0.9, 0.9, JoystickPlacement.SCREEN_RATIO, JoystickPlacement.SCREEN_RATIO,
+			this.playerIndex === 0 ? JOYSTICK_COLORS.red : JOYSTICK_COLORS.blue,
+			'move'
+		));
+
 		this.tiles.fill(255);
 	}
 	
@@ -51,7 +57,26 @@ export class GClientPackice extends ClientGameEngine {
 
 	
 
-	draw(ctx: CanvasRenderingContext2D): void {
+	draw(
+		ctx: CanvasRenderingContext2D,
+		screenWidth: number,
+		screenHeight: number,
+		applyToScreen: ()=>void
+	): void {
+		// Draw background
+		if (this.playerIndex === 0) {
+			ctx.fillStyle = "rgb(98, 25, 25)";
+		} else {
+			ctx.fillStyle = "rgb(25, 39, 98)";
+		}
+		ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+
+		// Apply to screen
+		ctx.save();
+		applyToScreen();
+
+		// Draw tiles
 		const floorImg = this.imageLoader.getImage("floor");
 		let tile = 0;
 		for (let y = 0; y < GClientPackice.TILES_Y; y++) {
@@ -68,10 +93,11 @@ export class GClientPackice extends ClientGameEngine {
 		}
 
 
-		const playerImg = this.imageLoader.getImage("player");
+		const imagesNames = ["playerRed", "playerBlue"];
 
 		// Draw players
-		for (const player of this.players) {
+		for (let i = 0; i < 2; i++) {
+			const player = this.players[i];
 			const px = player.x;
 			const py = player.y;
 			const size = 100;
@@ -80,9 +106,15 @@ export class GClientPackice extends ClientGameEngine {
 			ctx.save();
 			ctx.translate(px, py);
 			ctx.rotate(player.dir);
-			ctx.drawImage(playerImg, -half, -half, size, size);
+			ctx.drawImage(
+				this.imageLoader.getImage(imagesNames[i]),
+				-half, -half, size, size
+			);
 			ctx.restore();
 		}
+
+		// Cancel screen apply
+		ctx.restore();
 	}
 
 	clientNetwork(reader: DataReader | null): DataWriter {

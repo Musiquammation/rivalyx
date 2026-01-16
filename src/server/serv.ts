@@ -1,5 +1,10 @@
 import "dotenv/config";
+
+import fs from "fs";
+import http from "http";
+import https from "https";
 import { WebSocketServer, WebSocket } from "ws";
+
 import { DataReader } from "../net/DataReader";
 import { DataWriter } from "../net/DataWriter";
 import { CLIENT_IDS } from "../net/CLIENT_IDS";
@@ -13,9 +18,27 @@ if (!PORT) {
 	throw new Error("PORT is not defined or invalid");
 }
 
-const wss = new WebSocketServer({ port: PORT });
 
-console.log(`WebSocket server running on ws://localhost:${PORT}`);
+let server;
+
+if (Number(process.env.USE_HTTPS) === 0) {
+	server = http.createServer((req, res) => {
+		res.writeHead(200);
+	});
+} else {
+	const options = {
+		key: fs.readFileSync('path/to/private.key'),
+		cert: fs.readFileSync('path/to/certificate.crt')
+	};
+	server = https.createServer(options, (req, res) => {
+		res.writeHead(200);
+	});
+
+}
+
+
+
+const wss = new WebSocketServer({ server });
 
 
 interface Player {
@@ -38,6 +61,14 @@ wss.on("connection", (socket: WebSocket) => {
 	});
 });
 
+
+
+server.listen(PORT, () => {
+	console.log(`Server running on port ${PORT}`);
+});
+
+
+
 // Lobby structure
 interface Lobby {
 	hash: string;
@@ -49,11 +80,13 @@ class Session {
 	static LATENCY = 10;
 
 	game: ServerGameEngine;
+	playerCount: number;
 	players: Player[];
 
 	constructor(game: ServerGameEngine, players: Player[]) {
 		this.game = game;
 		this.players = players;
+		this.playerCount = players.length;
 	}
 
 	run() {
@@ -67,7 +100,7 @@ class Session {
 		if (ranking) {
 			const writer = new DataWriter();
 			writer.writeUint8(CLIENT_IDS.END_GAME);
-			writer.writeInt16(this.players.length);
+			writer.writeInt16(this.playerCount);
 			for (let i of ranking) {
 				writer.writeInt16(i);
 			}

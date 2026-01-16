@@ -21,7 +21,6 @@ let animationFrameId: number | null = null;
 let lastPackageSendTimestamp = -1;
 let globalImageLoader: ImageLoader | null = null;
 let globalRoomUsernames: string[] = [];
-const FORCED_LATENCY = 30;
 
 // Initialize connection with loading delay
 async function initConnection() {
@@ -174,7 +173,7 @@ function handleGameData(reader: DataReader) {
 		return;
 
 	const now = Date.now();
-	const diff = FORCED_LATENCY - (now - lastPackageSendTimestamp);
+	const diff = window.FORCED_LATENCY - (now - lastPackageSendTimestamp);
 
 	const bufferToSend = globalGameEngine.clientNetwork(reader).toArrayBuffer();
 	if (diff >= 0) {

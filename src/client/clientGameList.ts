@@ -1,5 +1,5 @@
 import { SHARED_DESCRIPTIONS, SharedGameDescription } from "../gameDescriptions";
-import { GClientPackice } from "../games/gpackice/GClientTest";
+import { GClientPackice } from "../games/gpackice/GClientPackice";
 import { StringMap } from "../StringMap";
 import { ClientGameEngine } from "./ClientGameEngine";
 import { ImageLoader } from "./ImageLoader";
