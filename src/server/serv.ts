@@ -4,6 +4,7 @@ import fs from "fs";
 import http from "http";
 import https from "https";
 import { WebSocketServer, WebSocket } from "ws";
+import crypto from "crypto";
 
 import { DataReader } from "../net/DataReader";
 import { DataWriter } from "../net/DataWriter";
