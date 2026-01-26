@@ -23,9 +23,9 @@ class Player {
 
 export class GClientPackice extends ClientGameEngine {
 	static IMAGES: StringMap = {
-		playerRed: "/assets/gpackice/player-red.svg",
-		playerBlue: "/assets/gpackice/player-blue.svg",
-		floor: "/assets/gpackice/floor.svg",
+		playerRed: "assets/gpackice/player-red.svg",
+		playerBlue: "assets/gpackice/player-blue.svg",
+		floor: "assets/gpackice/floor.svg",
 	};
 
 	static TILES_X = 9;
