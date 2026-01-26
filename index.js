@@ -553,9 +553,9 @@
     }
   };
   _GClientPackice.IMAGES = {
-    playerRed: "/assets/gpackice/player-red.svg",
-    playerBlue: "/assets/gpackice/player-blue.svg",
-    floor: "/assets/gpackice/floor.svg"
+    playerRed: "assets/gpackice/player-red.svg",
+    playerBlue: "assets/gpackice/player-blue.svg",
+    floor: "assets/gpackice/floor.svg"
   };
   _GClientPackice.TILES_X = 9;
   _GClientPackice.TILES_Y = 21;
