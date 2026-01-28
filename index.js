@@ -246,7 +246,8 @@
     }
   }
   const SHARED_DESCRIPTIONS = {
-    packice: { playerCount: 2 }
+    packice: { playerCount: 2 },
+    paint: { playerCount: 2 }
   };
   var JoystickPlacement = /* @__PURE__ */ ((JoystickPlacement2) => {
     JoystickPlacement2[JoystickPlacement2["CENTERED"] = 0] = "CENTERED";
@@ -258,25 +259,32 @@
     blue: { base: [35, 65, 165], stick: [65, 99, 208] },
     red: { base: [148, 45, 45], stick: [208, 65, 65] }
   };
-  class Joystick {
-    constructor(x, y, xpl, ypl, color, label, radius = 32) {
+  const _Joystick = class _Joystick {
+    constructor(x, y, xpl, ypl, color, label, radiusRatio = 1) {
+      this.radius = 32;
       this.x = x;
       this.y = y;
       this.xpl = xpl;
       this.ypl = ypl;
       this.label = label;
       this.color = color;
-      this.radius = radius;
+      this.radiusRatio = radiusRatio;
       this.activeTouchId = void 0;
       this.stickX = 0;
       this.stickY = 0;
       this.originX = void 0;
       this.originY = void 0;
     }
-  }
+    updateRatio(screenArea) {
+      this.radius = screenArea * this.radiusRatio * _Joystick.FACTOR;
+    }
+  };
+  _Joystick.FACTOR = 0.05;
+  let Joystick = _Joystick;
   class ClientGameEngine {
     constructor(imageLoader) {
       this.joysticks = /* @__PURE__ */ new Set();
+      this.buttons = /* @__PURE__ */ new Set();
       this.playerIndex = -1;
       this.canvas = null;
       this.imageLoader = imageLoader;
@@ -296,16 +304,18 @@
       };
       this.draw(ctx, this.canvas.width, this.canvas.height, applyToScreen);
     }
+    handleSubTouchEvent(kind, event, screenWidth, screenHeight, canvasWidth, canvasHeight) {
+    }
     setCanvas(canvas) {
       this.canvas = canvas;
     }
     handleTouchEvent(kind, event) {
       if (!this.canvas) return;
-      this.canvas.getBoundingClientRect();
       const screenWidth = window.innerWidth;
       const screenHeight = window.innerHeight;
       const canvasWidth = this.canvas.width;
       const canvasHeight = this.canvas.height;
+      this.handleSubTouchEvent(kind, event, screenWidth, screenHeight, canvasWidth, canvasHeight);
       let shouldPreventDefault = true;
       for (let i = 0; i < event.changedTouches.length; i++) {
         const touch = event.changedTouches[i];
@@ -368,6 +378,12 @@
         }
       }
     }
+    appendButton(button) {
+      this.buttons.add(button);
+    }
+    removeButton(button) {
+      this.buttons.delete(button);
+    }
     updateJoystickPosition(joystick, clientX, clientY) {
       if (joystick.originX === void 0 || joystick.originY === void 0) return;
       const radius = joystick.radius || 50;
@@ -402,26 +418,26 @@
       let x;
       let y;
       switch (joystick.xpl) {
-        case 0:
+        case JoystickPlacement.CENTERED:
           x = screenWidth / 2 + joystick.x;
           break;
-        case 1:
+        case JoystickPlacement.SCREEN_RATIO:
           x = screenWidth * joystick.x;
           break;
-        case 2:
+        case JoystickPlacement.GAME_RATIO:
           x = canvasWidth * joystick.x;
           break;
         default:
           x = joystick.x;
       }
       switch (joystick.ypl) {
-        case 0:
+        case JoystickPlacement.CENTERED:
           y = screenHeight / 2 + joystick.y;
           break;
-        case 1:
+        case JoystickPlacement.SCREEN_RATIO:
           y = screenHeight * joystick.y;
           break;
-        case 2:
+        case JoystickPlacement.GAME_RATIO:
           y = canvasHeight * joystick.y;
           break;
         default:
@@ -429,13 +445,14 @@
       }
       return { x, y };
     }
-    drawJoysticks(ctx) {
+    drawJoysticks(ctx, screenArea) {
       if (!this.canvas) return;
       const screenWidth = window.innerWidth;
       const screenHeight = window.innerHeight;
       const canvasWidth = this.canvas.width;
       const canvasHeight = this.canvas.height;
       for (const joystick of this.joysticks) {
+        joystick.updateRatio(screenArea);
         const pos = this.getJoystickPosition(joystick, screenWidth, screenHeight, canvasWidth, canvasHeight);
         const radius = joystick.radius;
         const stickX = joystick.stickX;
@@ -452,7 +469,7 @@
       }
     }
   }
-  class Player {
+  let Player$1 = class Player {
     constructor(x, y, dir) {
       this.vx = 0;
       this.vy = 0;
@@ -460,14 +477,14 @@
       this.y = y;
       this.dir = dir;
     }
-  }
+  };
   const _GClientPackice = class _GClientPackice extends ClientGameEngine {
     constructor(imageLoader) {
       super(imageLoader);
       this.tiles = new Uint8Array(_GClientPackice.TILES_Y * _GClientPackice.TILES_X);
       this.players = [
-        new Player(540, 290, Math.PI / 2),
-        new Player(540, 2090, Math.PI * 3 / 2)
+        new Player$1(540, 290, Math.PI / 2),
+        new Player$1(540, 2090, Math.PI * 3 / 2)
       ];
     }
     async start() {
@@ -480,6 +497,9 @@
         "move"
       ));
       this.tiles.fill(255);
+    }
+    getTimer() {
+      return -1;
     }
     getGameSize() {
       return { width: 1080, height: 2400 };
@@ -560,6 +580,157 @@
   _GClientPackice.TILES_X = 9;
   _GClientPackice.TILES_Y = 21;
   let GClientPackice = _GClientPackice;
+  const _Player = class _Player {
+    constructor(x, y, dir) {
+      this.vx = 0;
+      this.vy = 0;
+      this.x = x;
+      this.y = y;
+      this.dir = dir;
+    }
+  };
+  _Player.WIDTH = 40;
+  _Player.HEIGHT = 200;
+  let Player = _Player;
+  const _GClientPaint = class _GClientPaint extends ClientGameEngine {
+    constructor(imageLoader) {
+      super(imageLoader);
+      this.players = [
+        new Player(540, 290, Math.PI / 2),
+        new Player(540, 2090, Math.PI * 3 / 2)
+      ];
+      this.boostType = -1;
+      this.boostX = 0;
+      this.boostY = 0;
+      this.offscreen = new OffscreenCanvas(_GClientPaint.WIDTH, _GClientPaint.HEIGHT);
+      this.timer = -1;
+    }
+    async start() {
+      super.appendJoystick(new Joystick(
+        0.9,
+        0.9,
+        JoystickPlacement.SCREEN_RATIO,
+        JoystickPlacement.SCREEN_RATIO,
+        this.playerIndex === 0 ? JOYSTICK_COLORS.red : JOYSTICK_COLORS.blue,
+        "move"
+      ));
+      const subctx = this.offscreen.getContext("2d");
+      subctx.fillStyle = "#F3E9DC";
+      subctx.fillRect(0, 0, 1080, 2400);
+    }
+    getTimer() {
+      return this.timer;
+    }
+    getGameSize() {
+      return { width: _GClientPaint.WIDTH, height: _GClientPaint.HEIGHT };
+    }
+    draw(ctx, screenWidth, screenHeight, applyToScreen) {
+      ctx.save();
+      applyToScreen();
+      ctx.drawImage(this.offscreen, 0, 0);
+      if (this.boostType >= 0) {
+        ctx.save();
+        ctx.translate(this.boostX, this.boostY);
+        ctx.drawImage(
+          this.imageLoader.getImage(_GClientPaint.BOOST_LIST[this.boostType]),
+          -_GClientPaint.BOOST_RADIUS / 2,
+          -_GClientPaint.BOOST_RADIUS / 2,
+          _GClientPaint.BOOST_RADIUS,
+          _GClientPaint.BOOST_RADIUS
+        );
+        ctx.restore();
+      }
+      const imagesNames = ["playerRed", "playerBlue"];
+      for (let i = 0; i < 2; i++) {
+        const player = this.players[i];
+        const px = player.x;
+        const py = player.y;
+        const width = Player.WIDTH;
+        const height = Player.HEIGHT;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(player.dir);
+        ctx.drawImage(
+          this.imageLoader.getImage(imagesNames[i]),
+          -width / 2,
+          -height / 2,
+          width,
+          height
+        );
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+    clientNetwork(reader) {
+      if (reader) {
+        this.timer = reader.readInt32() / 60;
+        const boostType = reader.readInt8();
+        this.boostType = boostType;
+        if (boostType >= 0) {
+          this.boostX = reader.readFloat32();
+          this.boostY = reader.readFloat32();
+        }
+        console.log(boostType, this.boostX, this.boostY);
+        for (let i = 0; i < this.players.length; i++) {
+          const player = this.players[i];
+          const next_x = reader.readFloat32();
+          const next_y = reader.readFloat32();
+          const next_vx = reader.readFloat32();
+          const next_vy = reader.readFloat32();
+          let next_dir;
+          if (next_vx != 0 || next_vy != 0) {
+            next_dir = Math.atan2(next_vy, next_vx);
+          } else {
+            next_dir = player.dir;
+          }
+          const subctx = this.offscreen.getContext("2d");
+          subctx.save();
+          const steps = 10;
+          const colors = ["#FF6B6B", "#4ECDC4"];
+          subctx.fillStyle = colors[i];
+          for (let step = 0; step <= steps; step++) {
+            const t = step / steps;
+            const x = player.x + (next_x - player.x) * t;
+            const y = player.y + (next_y - player.y) * t;
+            const dir = player.dir + (next_dir - player.dir) * t;
+            subctx.save();
+            subctx.translate(x, y);
+            subctx.rotate(dir);
+            subctx.fillRect(-Player.WIDTH / 2, -Player.HEIGHT / 2, Player.WIDTH, Player.HEIGHT);
+            subctx.restore();
+          }
+          subctx.restore();
+          player.x = next_x;
+          player.y = next_y;
+          player.dir = next_dir;
+          player.vx = next_vx;
+          player.vy = next_vy;
+        }
+      }
+      const writer = new DataWriter();
+      writer.writeInt8(SERVER_IDS.GAME_DATA);
+      const joystick = super.getJoyStickDirection("move");
+      if (joystick) {
+        writer.writeInt8(1);
+        writer.writeFloat32(joystick.x);
+        writer.writeFloat32(joystick.y);
+      } else {
+        writer.writeInt8(0);
+      }
+      writer.writeInt8(SERVER_IDS.FINISH);
+      return writer;
+    }
+  };
+  _GClientPaint.IMAGES = {
+    playerRed: "assets/gpaint/player-red.svg",
+    playerBlue: "assets/gpaint/player-blue.svg",
+    boost_speed: "assets/gpaint/boost-speed.svg"
+  };
+  _GClientPaint.BOOST_LIST = ["boost_speed", "boost_splash", "boost_big"];
+  _GClientPaint.BOOST_RADIUS = 128;
+  _GClientPaint.WIDTH = 1080;
+  _GClientPaint.HEIGHT = 2400;
+  let GClientPaint = _GClientPaint;
   const CLIENT_DESCRIPTIONS = [
     {
       create: (imageLoader) => {
@@ -568,6 +739,14 @@
       desc: SHARED_DESCRIPTIONS.packice,
       name: "Banquise",
       images: GClientPackice.IMAGES
+    },
+    {
+      create: (imageLoader) => {
+        return new GClientPaint(imageLoader);
+      },
+      desc: SHARED_DESCRIPTIONS.paint,
+      name: "Paint",
+      images: GClientPaint.IMAGES
     }
   ];
   let socket = null;
@@ -907,6 +1086,23 @@
     globalRoomUsernames = [];
     updateUI();
   }
+  function formatTimer(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    const tenths = Math.floor(seconds % 1 * 10);
+    return `${minutes}:${secs.toString().padStart(2, "0")}.${tenths}`;
+  }
+  function updateTimerDisplay(gameEngine) {
+    const timerElement = document.getElementById("timer");
+    if (!timerElement) return;
+    const timerValue = gameEngine.getTimer();
+    if (timerValue < 0) {
+      timerElement.style.display = "none";
+    } else {
+      timerElement.style.display = "block";
+      timerElement.textContent = formatTimer(timerValue);
+    }
+  }
   function startGame() {
     if (!globalGameEngine)
       return;
@@ -928,9 +1124,13 @@
     };
     window.addEventListener("resize", handleResize);
     function gameLoop() {
+      const screenArea = Math.sqrt(
+        window.innerWidth * window.innerWidth + window.innerHeight * window.innerHeight
+      );
       ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
       gameEngine.drawGame(ctx);
-      gameEngine.drawJoysticks(ctx);
+      gameEngine.drawJoysticks(ctx, screenArea);
+      updateTimerDisplay(gameEngine);
       animationFrameId = requestAnimationFrame(gameLoop);
     }
     gameLoop();
@@ -943,6 +1143,10 @@
     const gameCanvas = document.getElementById("gameCanvas");
     if (gameCanvas) {
       gameCanvas.style.display = "none";
+    }
+    const timerElement = document.getElementById("timer");
+    if (timerElement) {
+      timerElement.style.display = "none";
     }
   }
   document.addEventListener("DOMContentLoaded", () => {

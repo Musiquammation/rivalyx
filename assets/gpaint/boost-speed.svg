@@ -1,0 +1,9 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" xmlns:bx="https://boxy-svg.com">
+  <defs></defs>
+  <rect x="-50" y="450" width="400" height="400" style="stroke: rgb(0, 0, 0); fill: rgb(179, 218, 85); stroke-linejoin: bevel; stroke-linecap: round; stroke-width: 50px; transform-box: fill-box; transform-origin: 50% 50%;" rx="59.124" ry="59.124" transform="matrix(0, -1, -1, 0, 100, -400)"></rect>
+  <path d="M 150 -300 L 200 -200 L 100 -200 L 150 -300 Z" bx:shape="triangle 100 -300 100 100 0.5 0 1@112d491b" style="fill: rgb(0,0,0); stroke: rgb(0, 0, 0); transform-box: fill-box; transform-origin: 50% 50%;" transform="matrix(0, -1, -1, 0, 200, 524.202515)"></path>
+  <path d="M -50 300 L 0 400 L -100 400 L -50 300 Z" bx:shape="triangle -100 300 100 100 0.5 0 1@59f0c54a" style="fill: rgb(0,0,0); stroke: rgb(0, 0, 0); stroke-width: 1; transform-origin: -50px 350px;" transform="matrix(0, -1, 1, 0, 200.000015, -75.800003)"></path>
+  <path d="M 250 135.268 L 400 400.001 L 100 400.001 L 250 135.268 Z" bx:shape="triangle 100 135.268 300 264.733 0.5 0 1@d29fb974" style="fill: rgb(0,0,0); stroke: rgb(0, 0, 0);"></path>
+  <path d="M 250 301 L 300 401 L 200 401 L 250 301 Z" bx:shape="triangle 200 301 100 100 0.5 0 1@099e7efa" style="fill: rgb(179, 218, 85); stroke: none;"></path>
+</svg>
