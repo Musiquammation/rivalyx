@@ -10,14 +10,13 @@ import { StringMap } from "../../StringMap";
 class Player {
 	x: number;
 	y: number;
-	dir: number;
-	vx = 0;
-	vy = 0;
+	a: number;
+	airKind = 1;
 
-	constructor(x: number, y: number, dir: number) {
+	constructor(x: number, y: number, a: number) {
 		this.x = x;
 		this.y = y;
-		this.dir = dir;
+		this.a = a;
 	}
 }
 
@@ -28,10 +27,6 @@ export class GClientPackice extends ClientGameEngine {
 		playerBlue: "assets/gpackice/player-blue.svg",
 		floor: "assets/gpackice/floor.svg",
 	};
-
-	static TILES_X = 9;
-	static TILES_Y = 21;
-	tiles = new Uint8Array(GClientPackice.TILES_Y * GClientPackice.TILES_X);
 
 	players: Player[] = [
 		new Player(540, 290, Math.PI/2),
@@ -48,8 +43,6 @@ export class GClientPackice extends ClientGameEngine {
 			this.playerIndex === 0 ? JOYSTICK_COLORS.red : JOYSTICK_COLORS.blue,
 			'move'
 		));
-
-		this.tiles.fill(255);
 	}
 
 	override getTimer() {
@@ -83,22 +76,6 @@ export class GClientPackice extends ClientGameEngine {
 		ctx.save();
 		applyToScreen();
 
-		// Draw tiles
-		const floorImg = this.imageLoader.getImage("floor");
-		let tile = 0;
-		for (let y = 0; y < GClientPackice.TILES_Y; y++) {
-			for (let x = 0; x < GClientPackice.TILES_X; x++) {
-				const line = this.tiles[tile];
-				ctx.save();
-				ctx.globalAlpha = line/255;
-				ctx.drawImage(floorImg, 100*x + 90, 100*y + 140, 100, 100);
-				ctx.restore();
-				// ctx.fillStyle = "red";
-				// ctx.fillRect(100*x + 150, 100*y + 140, 100, 100);
-				tile++;
-			}
-		}
-
 
 		const imagesNames = ["playerRed", "playerBlue"];
 
@@ -112,7 +89,7 @@ export class GClientPackice extends ClientGameEngine {
 
 			ctx.save();
 			ctx.translate(px, py);
-			ctx.rotate(player.dir);
+			ctx.rotate(player.a);
 			ctx.drawImage(
 				this.imageLoader.getImage(imagesNames[i]),
 				-half, -half, size, size
@@ -129,30 +106,14 @@ export class GClientPackice extends ClientGameEngine {
 			for (let player of this.players) {
 				player.x = reader.readFloat32();
 				player.y = reader.readFloat32();
-				player.vx = reader.readFloat32();
-				player.vy = reader.readFloat32();
-
-				if (player.vx != 0 || player.vy != 0) {
-					player.dir = Math.atan2(player.vy, player.vx);
-				}
+				player.a = reader.readFloat32();
+				player.airKind = reader.readInt8();
 			}
-
-			this.tiles = reader.readUint8Array(GClientPackice.TILES_Y * GClientPackice.TILES_X);
 		}
 		
 
 		const writer = new DataWriter();
 		writer.writeInt8(SERVER_IDS.GAME_DATA);
-
-		const joystick = super.getJoyStickDirection("move");
-		if (joystick) {
-			writer.writeInt8(1);
-			writer.writeFloat32(joystick.x);
-			writer.writeFloat32(joystick.y);
-		} else {
-			writer.writeInt8(0);
-		}
-
 		writer.writeInt8(SERVER_IDS.FINISH);
 		return writer;
 	}

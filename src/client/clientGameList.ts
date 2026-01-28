@@ -1,5 +1,6 @@
 import { SHARED_DESCRIPTIONS, SharedGameDescription } from "../gameDescriptions";
 import { GClientPackice } from "../games/gpackice/GClientPackice";
+import { GClientPaint } from "../games/gpaint/GClientPaint";
 import { StringMap } from "../StringMap";
 import { ClientGameEngine } from "./ClientGameEngine";
 import { ImageLoader } from "./ImageLoader";
@@ -17,7 +18,13 @@ export const CLIENT_DESCRIPTIONS: GameDesc[] = [
 		desc: SHARED_DESCRIPTIONS.packice,
 		name: "Banquise",
 		images: GClientPackice.IMAGES
+	},
 
+	{
+		create: imageLoader => {return new GClientPaint(imageLoader);},
+		desc: SHARED_DESCRIPTIONS.paint,
+		name: "Paint",
+		images: GClientPaint.IMAGES
 	}
 ];
 

@@ -1,71 +1,16 @@
 import { DataReader } from "../net/DataReader";
 import { DataWriter } from "../net/DataWriter";
+import { Button } from "./Button";
 import { ImageLoader } from "./ImageLoader";
+import { Joystick, JoystickPlacement } from "./Joystick";
 
 
-export enum JoystickPlacement { 
-	CENTERED,
-	SCREEN_RATIO,
-	GAME_RATIO
-}
 
-export interface JoystickColor {
-	base: number[];
-	stick: number[];
-}
-
-
-export const JOYSTICK_COLORS: {[key: string]: JoystickColor} = {
-	blue: {base: [35, 65, 165], stick: [65, 99, 208]},
-	red:  {base: [148, 45, 45], stick: [208, 65, 65]}
-};
-
-
-export class Joystick {
-	x: number;
-	y: number;
-	xpl: JoystickPlacement;
-	ypl: JoystickPlacement;
-	radius: number;
-	label: string;
-	color: JoystickColor;
-
-	activeTouchId?: number;
-	stickX: number;
-	stickY: number;
-	
-	// Position d'origine du joystick (où le joueur a touché)
-	originX?: number;
-	originY?: number;
-
-	constructor(
-		x: number,
-		y: number,
-		xpl: JoystickPlacement,
-		ypl: JoystickPlacement,
-		color: JoystickColor,
-		label: string,
-		radius: number = 32
-	) {
-		this.x = x;
-		this.y = y;
-		this.xpl = xpl;
-		this.ypl = ypl;
-		this.label = label;
-		this.color = color;
-		this.radius = radius;
-
-		this.activeTouchId = undefined;
-		this.stickX = 0;
-		this.stickY = 0;
-		this.originX = undefined;
-		this.originY = undefined;
-	}
-}
 
 
 export abstract class ClientGameEngine {
 	joysticks = new Set<Joystick>();
+	buttons = new Set<Button>();
 	playerIndex = -1;
 
 	private canvas: HTMLCanvasElement | null = null;
@@ -77,6 +22,8 @@ export abstract class ClientGameEngine {
 
 	abstract start(): void;
 	abstract getGameSize(): {width: number, height: number};
+	abstract getTimer(): number;
+	
 	protected abstract draw(
 		ctx: CanvasRenderingContext2D,
 		screenWidth: number,
@@ -107,6 +54,15 @@ export abstract class ClientGameEngine {
 	
 	abstract clientNetwork(reader: DataReader | null): DataWriter;
 
+	protected handleSubTouchEvent(
+		kind: 'touchstart' | 'touchmove' | 'touchend',
+		event: TouchEvent,
+		screenWidth: number,
+		screenHeight: number,
+		canvasWidth: number,
+		canvasHeight: number
+	) {}
+
 	setCanvas(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
 	}
@@ -114,11 +70,11 @@ export abstract class ClientGameEngine {
 	handleTouchEvent(kind: 'touchstart' | 'touchmove' | 'touchend', event: TouchEvent) {
 		if (!this.canvas) return;
 		
-		const rect = this.canvas.getBoundingClientRect();
 		const screenWidth = window.innerWidth;
 		const screenHeight = window.innerHeight;
 		const canvasWidth = this.canvas.width;
 		const canvasHeight = this.canvas.height;
+		this.handleSubTouchEvent(kind, event, screenWidth, screenHeight, canvasWidth, canvasHeight);
 
 		// Check if any touch is on an interactive element (button, link, etc.)
 		let shouldPreventDefault = true;
@@ -212,6 +168,16 @@ export abstract class ClientGameEngine {
 		}
 	}
 
+
+	protected appendButton(button: Button) {
+		this.buttons.add(button);
+	}
+
+	protected removeButton(button: Button) {
+		this.buttons.delete(button);
+	}
+
+
 	private updateJoystickPosition(joystick: Joystick, clientX: number, clientY: number) {
 		if (joystick.originX === undefined || joystick.originY === undefined) return;
 		
@@ -290,7 +256,7 @@ export abstract class ClientGameEngine {
 		return { x, y };
 	}
 
-	drawJoysticks(ctx: CanvasRenderingContext2D) {
+	drawJoysticks(ctx: CanvasRenderingContext2D, screenArea: number) {
 		if (!this.canvas) return;
 		
 		const screenWidth = window.innerWidth;
@@ -299,6 +265,8 @@ export abstract class ClientGameEngine {
 		const canvasHeight = this.canvas.height;
 
 		for (const joystick of this.joysticks) {
+			joystick.updateRatio(screenArea);
+
 			// Ne dessiner que si le joystick est actif
 			// if (joystick.activeTouchId === undefined) continue;
 

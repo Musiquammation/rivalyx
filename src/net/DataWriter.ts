@@ -8,7 +8,7 @@ export class DataWriter {
 		this.view = new DataView(this.buffer);
 	}
 
-	private checkSize(required: number) {
+	checkSize(required: number) {
 		const needed = this.offset + required;
 
 		if (needed <= this.buffer.byteLength) return;

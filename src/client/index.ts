@@ -458,6 +458,27 @@ function goToMainMenu() {
 	updateUI();
 }
 
+function formatTimer(seconds: number): string {
+	const minutes = Math.floor(seconds / 60);
+	const secs = Math.floor(seconds % 60);
+	const tenths = Math.floor((seconds % 1) * 10);
+	return `${minutes}:${secs.toString().padStart(2, '0')}.${tenths}`;
+}
+
+function updateTimerDisplay(gameEngine: ClientGameEngine) {
+	const timerElement = document.getElementById("timer");
+	if (!timerElement) return;
+	
+	const timerValue = gameEngine.getTimer();
+	
+	if (timerValue < 0) {
+		timerElement.style.display = "none";
+	} else {
+		timerElement.style.display = "block";
+		timerElement.textContent = formatTimer(timerValue);
+	}
+}
+
 function startGame() {
 	if (!globalGameEngine)
 		return;
@@ -495,6 +516,11 @@ function startGame() {
 	
 	// Game loop
 	function gameLoop() {
+		const screenArea = Math.sqrt(
+			window.innerWidth*window.innerWidth +
+			window.innerHeight*window.innerHeight
+		);
+
 		// Clear canvas
 		ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
 		
@@ -502,7 +528,10 @@ function startGame() {
 		gameEngine.drawGame(ctx);
 		
 		// Draw joysticks on top
-		gameEngine.drawJoysticks(ctx);
+		gameEngine.drawJoysticks(ctx, screenArea);
+		
+		// Update timer display
+		updateTimerDisplay(gameEngine);
 		
 		// Continue loop
 		animationFrameId = requestAnimationFrame(gameLoop);
@@ -521,6 +550,11 @@ function stopGame() {
 	const gameCanvas = document.getElementById("gameCanvas") as HTMLCanvasElement;
 	if (gameCanvas) {
 		gameCanvas.style.display = "none";
+	}
+	
+	const timerElement = document.getElementById("timer");
+	if (timerElement) {
+		timerElement.style.display = "none";
 	}
 }
 
