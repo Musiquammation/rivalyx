@@ -41,13 +41,57 @@ export class GServPackice extends ServerGameEngine {
 		this.alivePlayers = this.players.length;
 	}
 
-	frame() {
-		for (let player of this.players) {
-			if (player.eliminationFrame < 0) {
-				player.x += player.vx * GServPackice.PLAYER_SPEED;
-				player.y += player.vy * GServPackice.PLAYER_SPEED;
+	moveAndCollide() {
+		const radius = 50;
+
+		for (const p of this.players) {
+			p.x += p.vx * GServPackice.PLAYER_SPEED;
+			p.y += p.vy * GServPackice.PLAYER_SPEED;
+		}
+
+		for (let i = 0; i < this.players.length; i++) {
+			const p0 = this.players[i];
+			
+			for (let j = i + 1; j < this.players.length; j++) {
+				const p1 = this.players[j];
+				if (p1.eliminationFrame >= 0)
+					continue; // player is dead
+
+				// Vector between centers
+				const dx = p1.x - p0.x;
+				const dy = p1.y - p0.y;
+
+				const distSq = dx * dx + dy * dy;
+				const minDist = radius * 2;
+
+				// Collision check
+				if (distSq < minDist * minDist && distSq > 0) {
+
+					const dist = Math.sqrt(distSq);
+
+					// Normalized collision normal
+					const nx = dx / dist;
+					const ny = dy / dist;
+
+					// Penetration depth
+					const overlap = minDist - dist;
+
+					// Split correction equally
+					const correction = overlap * 0.5;
+
+					p0.x -= nx * correction;
+					p0.y -= ny * correction;
+
+					p1.x += nx * correction;
+					p1.y += ny * correction;
+				}
 			}
 		}
+
+	}
+
+	frame() {
+		this.moveAndCollide();
 
 
 		for (let player of this.players) {
@@ -134,7 +178,7 @@ export class GServPackice extends ServerGameEngine {
 
 		// Clamp tileX, tileY to grid if needed
 		const isValidTile = (tx: number, ty: number) =>
-			tx >= 0 && tx < GServPackice.WIDTH && ty >= 0 && ty < GServPackice.HEIGHT;
+			tx >= 0 && tx < GServPackice.TILES_X && ty >= 0 && ty < GServPackice.TILES_Y;
 
 		// Helper to get a tile index safely
 		const getTileIndex = (tx: number, ty: number) => {
