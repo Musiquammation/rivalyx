@@ -102,7 +102,7 @@ class Session {
 			return;
 		}
 
-		const ranking = this.game.frame();
+		/*const ranking = this.game.frame();
 		if (ranking) {
 			const writer = new DataWriter();
 			writer.writeUint8(CLIENT_IDS.END_GAME);
@@ -121,7 +121,7 @@ class Session {
 			console.log("Game finished!");
 			this.destroy();
 			return;
-		}
+		}*/
 
 		setTimeout(() => {
 			this.run();
@@ -213,7 +213,7 @@ function handleCreateLobby(reader: DataReader, player: Player) {
 	const hash = generateLobbyHash();
 	const gameId = reader.readInt32();
 	
-	if (SERV_DESCRIPTIONS[gameId].desc.playerCount === 1) {
+	if (SERV_DESCRIPTIONS[gameId].playerCount === 1) {
 		const writer = new DataWriter();
 		writer.writeUint8(CLIENT_IDS.LOBBY_GAME);
 		writer.write256(hash);
@@ -222,8 +222,7 @@ function handleCreateLobby(reader: DataReader, player: Player) {
 		writer.writeInt32(-1);
 		writer.writeInt32(CLIENT_IDS.FINISH);
 		
-		const engine = SERV_DESCRIPTIONS[gameId].create();
-		engine.start();
+		const engine = new ServerGameEngine(SERV_DESCRIPTIONS[gameId]);
 		const session = new Session(engine, [player]);
 		sessions.push(session);
 		session.run();
@@ -280,7 +279,7 @@ function handleLobbyJoin(reader: DataReader, player: Player) {
 
 	// Check if the lobby is now full, and if so, send LOBBY_UPDATE_PLAYER_COUNT -1 and create/start the game
 	const gameDesc = SERV_DESCRIPTIONS[lobby.gameId];
-	if (lobby.players.length === gameDesc.desc.playerCount) {
+	if (lobby.players.length === gameDesc.playerCount) {
 		writer.writeUint8(CLIENT_IDS.LOBBY_UPDATE_PLAYER_COUNT);
 		writer.writeInt32(-lobby.players.length);
 
@@ -295,8 +294,7 @@ function handleLobbyJoin(reader: DataReader, player: Player) {
 			lobby.players[i].socket.send(sharedArrayBuffer);
 		}
 
-		const engine = gameDesc.create();
-		engine.start();
+		const engine = new ServerGameEngine(gameDesc);
 
 		const session = new Session(engine, lobby.players);
 		sessions.push(session);
@@ -344,7 +342,7 @@ function handleGameData(reader: DataReader, player: Player) {
 		if (index < 0)
 			continue;
 
-		const writer = session.game.servNetwork(reader, index);
+		const writer = session.game.handleMessage(reader, index);
 		player.socket.send(writer.toArrayBuffer());
 		return true;
 	}
