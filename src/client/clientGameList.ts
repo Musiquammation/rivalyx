@@ -1,30 +1,6 @@
-import { SHARED_DESCRIPTIONS, SharedGameDescription } from "../gameDescriptions";
-import { GClientPackice } from "../games/gpackice/GClientPackice";
-import { GClientPaint } from "../games/gpaint/GClientPaint";
-import { StringMap } from "../StringMap";
-import { ClientGameEngine } from "./ClientGameEngine";
-import { ImageLoader } from "./ImageLoader";
+import { packice_client } from "../games/gpackice/packice_client";
+import { ClientInterface } from "./ClientInterface";
 
-interface GameDesc {
-	create: (imageLoader: ImageLoader) => ClientGameEngine;
-	desc: SharedGameDescription;
-	name: string;
-	images: StringMap;
-}
-
-export const CLIENT_DESCRIPTIONS: GameDesc[] = [
-	{
-		create: imageLoader => {return new GClientPackice(imageLoader);},
-		desc: SHARED_DESCRIPTIONS.packice,
-		name: "Banquise",
-		images: GClientPackice.IMAGES
-	},
-
-	{
-		create: imageLoader => {return new GClientPaint(imageLoader);},
-		desc: SHARED_DESCRIPTIONS.paint,
-		name: "Paint",
-		images: GClientPaint.IMAGES
-	}
+export const CLIENT_DESCRIPTIONS: ClientInterface<any, any>[] = [
+    packice_client
 ];
-
