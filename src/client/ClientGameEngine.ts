@@ -1,63 +1,37 @@
-import { GameInterface } from "../GameInterface";
-import { getTimestamp } from "../getTimestamp";
 import { DataReader } from "../net/DataReader";
 import { DataWriter } from "../net/DataWriter";
-import { SERVER_IDS } from "../net/SERVER_IDS";
 import { Button } from "./Button";
-import { ClientInterface } from "./ClientInterface";
 import { ImageLoader } from "./ImageLoader";
 import { Joystick, JoystickPlacement } from "./Joystick";
 
 
-const MAX_FRAME_DURATION = 10;
-
-
-interface Input {
-	date: number;
-	content: ArrayBuffer;
-}
 
 
 
-export class ClientGameEngine {
+export abstract class ClientGameEngine {
 	joysticks = new Set<Joystick>();
 	buttons = new Set<Button>();
 	playerIndex = -1;
-	lastSendDate = -Infinity;
 
 	private canvas: HTMLCanvasElement | null = null;
-	private object: ClientInterface<any, any>;
-	private snapshot: any;
-	private memory: any;
-	private imageLoader: ImageLoader;
-	private inputs: Input[] = [];
+	protected imageLoader: ImageLoader;
 
-	constructor(imageLoader: ImageLoader, object: ClientInterface<any, any>) {
+	constructor(imageLoader: ImageLoader) {
 		this.imageLoader = imageLoader;
-		this.object = object;
-		this.snapshot = object.game.createSnapshot();
 	}
+
+	abstract start(): void;
+	abstract getGameSize(): {width: number, height: number};
+	abstract getTimer(): number;
 	
+	protected abstract draw(
+		ctx: CanvasRenderingContext2D,
+		screenWidth: number,
+		screenHeight: number,
+		applyToScreen: ()=>void
+	): void;
 
-	start() {
-		this.memory = this.object.createMemory(
-			this.snapshot, this, this.playerIndex);
-	}
-
-    getGameSize() {
-		return this.object.gameSize;
-	}
-
-	getTimer() {
-		return this.object.getTimer(this.snapshot);
-	}
-
-	addInput(data: ArrayBuffer) {
-		this.inputs.push({date: getTimestamp(), content: data});
-		this.object.game.handleInput(this.snapshot, new DataReader(data), this.playerIndex);
-	}
-	
-	draw(ctx: CanvasRenderingContext2D) {
+	drawGame(ctx: CanvasRenderingContext2D) {
 		const applyToScreen = () => {
 			const gameSize = this.getGameSize();
 			const screenWidth = this.canvas!.width;
@@ -75,118 +49,19 @@ export class ClientGameEngine {
 		};
 
 		
-		this.object.draw(this.snapshot, this.memory, ctx,
-			this.canvas!.width, this.canvas!.height,
-			this.imageLoader, this.playerIndex, applyToScreen);
+		this.draw(ctx, this.canvas!.width, this.canvas!.height, applyToScreen);
 	}
 	
+	abstract clientNetwork(reader: DataReader | null): DataWriter;
 
-	private getFirstInput(date: number): number {
-		let l = 0;
-		let r = this.inputs.length;
-
-		while (l < r) {
-			const mid = (l + r) >>> 1;
-			if (this.inputs[mid].date < date)
-				l = mid + 1;
-			else
-				r = mid;
-		}
-		return l;
-	}
-
-
-	
-	runFrame(duration: number) {
-		this.object.runPublicFrame(this.snapshot, this.memory, this.playerIndex, this);
-
-		while (duration >= MAX_FRAME_DURATION) {
-			this.object.game.frame(this.snapshot, MAX_FRAME_DURATION);
-			duration -= MAX_FRAME_DURATION;
-		}
-
-		this.object.game.frame(this.snapshot, duration);
-	}
-
-
-	handleNetwork(reader: DataReader | null): DataWriter {
-		if (reader) {
-			// Date
-			const servDate = reader.readUint32();
-
-			// Take status
-			this.object.game.readNetworkDesc(this.snapshot, reader);
-
-			if (this.inputs.length === 0) {
-				const date = getTimestamp();
-				console.log(date - this.lastSendDate);
-				this.object.game.frame(
-					this.snapshot,
-					date - this.lastSendDate
-				);
-				
-			} else {
-				// Simulate until now
-				const lengthLimit = this.inputs.length - 1;
-				console.log("RUN:", lengthLimit);
-
-				console.log(this.inputs[0].date - this.lastSendDate);
-				this.object.game.frame(
-					this.snapshot,
-					Math.max(this.inputs[0].date - this.lastSendDate, 0)
-				);
-
-				for (let i = 0; i < lengthLimit; i++) {
-					const input = this.inputs[i];
-					let date = Math.max(this.lastSendDate, input.date);
-					console.log(this.inputs[i+1].date - date, this.snapshot.players[0].y);
-
-					this.object.game.handleInput(this.snapshot,
-						new DataReader(input.content), this.playerIndex);
-
-					this.object.game.frame(
-						this.snapshot,
-						Math.max(this.inputs[i+1].date - date, 0)
-					);
-				}
-	
-				const date = getTimestamp();
-				this.object.game.handleInput(this.snapshot,
-					new DataReader(this.inputs[lengthLimit].content), this.playerIndex);
-
-				console.log(date - this.inputs[lengthLimit].date);
-				this.object.game.frame(
-					this.snapshot,
-					date - this.inputs[lengthLimit].date
-				);
-			}
-
-		}
-
-		const writer = new DataWriter();
-		writer.writeUint8(SERVER_IDS.GAME_DATA);
-		writer.writeUint32(getTimestamp());
-		
-		// Send inputs
-		for (let input of this.inputs) {
-			writer.writeUint32(input.date);
-			writer.addArrayBuffer(input.content);
-		}
-
-		writer.writeUint32(0); // final date
-		writer.writeUint8(SERVER_IDS.FINISH);
-		this.inputs.length = 0; // empty inputs
-
-
-		this.lastSendDate = getTimestamp();
-		return writer;
-	}
-
-
-
-
-
-
+	protected handleSubTouchEvent(
+		kind: 'touchstart' | 'touchmove' | 'touchend',
+		event: TouchEvent,
+		screenWidth: number,
+		screenHeight: number,
+		canvasWidth: number,
+		canvasHeight: number
+	) {}
 
 	setCanvas(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
@@ -199,8 +74,7 @@ export class ClientGameEngine {
 		const screenHeight = window.innerHeight;
 		const canvasWidth = this.canvas.width;
 		const canvasHeight = this.canvas.height;
-		this.object.handleSubTouchEvent(this.snapshot, kind, event,
-			screenWidth, screenHeight, canvasWidth, canvasHeight);
+		this.handleSubTouchEvent(kind, event, screenWidth, screenHeight, canvasWidth, canvasHeight);
 
 		// Check if any touch is on an interactive element (button, link, etc.)
 		let shouldPreventDefault = true;
@@ -295,11 +169,11 @@ export class ClientGameEngine {
 	}
 
 
-	appendButton(button: Button) {
+	protected appendButton(button: Button) {
 		this.buttons.add(button);
 	}
 
-	removeButton(button: Button) {
+	protected removeButton(button: Button) {
 		this.buttons.delete(button);
 	}
 
@@ -323,17 +197,17 @@ export class ClientGameEngine {
 		}
 	}
 
-	appendJoystick(joystick: Joystick) {
+	protected appendJoystick(joystick: Joystick) {
 		joystick.stickX = 0;
 		joystick.stickY = 0;
 		return this.joysticks.add(joystick);
 	}
 	
-	removeJoystick(joystick: Joystick) {
+	protected removeJoystick(joystick: Joystick) {
 		return this.joysticks.delete(joystick);
 	}
 
-	getJoyStickDirection(label: string) {
+	protected getJoyStickDirection(label: string) {
 		const joystick = Array.from(this.joysticks).find(j => j.label === label);
 		if (!joystick) return null;
 		return { x: joystick.stickX, y: joystick.stickY };
@@ -416,4 +290,3 @@ export class ClientGameEngine {
 		}
 	}
 }
-

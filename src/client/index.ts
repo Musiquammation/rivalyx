@@ -136,7 +136,7 @@ async function handleLobbyGame(reader: DataReader) {
 	
 	// Get max players from game description
 	if (globalGameId >= 0 && globalGameId < CLIENT_DESCRIPTIONS.length) {
-		maxPlayers = CLIENT_DESCRIPTIONS[globalGameId].game.playerCount;
+		maxPlayers = CLIENT_DESCRIPTIONS[globalGameId].desc.playerCount;
 	} else {
 		maxPlayers = null;
 	}
@@ -156,8 +156,7 @@ function handlePlayerCountUpdate(reader: DataReader) {
 	updateWaitingMenu();
 
 	if (number < 0) {
-		globalGameEngine = new ClientGameEngine(
-			globalImageLoader!, CLIENT_DESCRIPTIONS[globalGameId]);
+		globalGameEngine = CLIENT_DESCRIPTIONS[globalGameId].create(globalImageLoader!);
 		globalGameEngine.playerIndex = (-number) - 1;
 		console.log("Player index:", globalGameEngine.playerIndex)
 
@@ -176,7 +175,7 @@ function handleGameData(reader: DataReader) {
 	const now = Date.now();
 	const diff = window.FORCED_LATENCY - (now - lastPackageSendTimestamp);
 
-	const bufferToSend = globalGameEngine.handleNetwork(reader).toArrayBuffer();
+	const bufferToSend = globalGameEngine.clientNetwork(reader).toArrayBuffer();
 	if (diff >= 0) {
 		setTimeout(() => {
 			lastPackageSendTimestamp = Date.now();
@@ -289,9 +288,7 @@ async function showGameSelectionMenu(): Promise<number> {
 		gameList.innerHTML = "";
 		
 		// Populate game list from gameDescriptions
-		for (let i = 0; i < CLIENT_DESCRIPTIONS.length; i++) {
-			const gameDesc = CLIENT_DESCRIPTIONS[i];
-
+		CLIENT_DESCRIPTIONS.forEach((gameDesc, index) => {
 			const gameItem = document.createElement("div");
 			gameItem.className = "gameItem";
 			
@@ -301,19 +298,18 @@ async function showGameSelectionMenu(): Promise<number> {
 			
 			const gamePlayers = document.createElement("div");
 			gamePlayers.className = "gameItemPlayers";
-			const pc = gameDesc.game.playerCount;
-			gamePlayers.textContent = `${pc} joueur${pc > 1 ? 's' : ''}`;
+			gamePlayers.textContent = `${gameDesc.desc.playerCount} joueur${gameDesc.desc.playerCount > 1 ? 's' : ''}`;
 			
 			gameItem.appendChild(gameName);
 			gameItem.appendChild(gamePlayers);
 			
 			gameItem.addEventListener("click", () => {
 				gameMenu.classList.remove("show");
-				resolve(i);
+				resolve(index);
 			});
 			
 			gameList.appendChild(gameItem);
-		}
+		});
 		
 		// Show menu
 		gameMenu.classList.add("show");
@@ -502,7 +498,7 @@ function startGame() {
 	gameEngine.start();
 
 	// Send first message
-	socket?.send(gameEngine.handleNetwork(null).toArrayBuffer());
+	socket?.send(gameEngine.clientNetwork(null).toArrayBuffer());
 	
 	// Show canvas
 	gameCanvas.style.display = "block";
@@ -518,16 +514,8 @@ function startGame() {
 	};
 	window.addEventListener("resize", handleResize);
 	
-	let lastFrameDate = Date.now();
-
 	// Game loop
 	function gameLoop() {
-		// Collect inputs and run frame
-		const now = Date.now();
-		gameEngine.runFrame(now - lastFrameDate);
-		lastFrameDate = now;
-
-
 		const screenArea = Math.sqrt(
 			window.innerWidth*window.innerWidth +
 			window.innerHeight*window.innerHeight
@@ -537,7 +525,7 @@ function startGame() {
 		ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
 		
 		// Draw game
-		gameEngine.draw(ctx);
+		gameEngine.drawGame(ctx);
 		
 		// Draw joysticks on top
 		gameEngine.drawJoysticks(ctx, screenArea);
