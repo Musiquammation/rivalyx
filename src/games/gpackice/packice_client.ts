@@ -112,7 +112,7 @@ export const packice_client: ClientInterface<Snapshot, Memory> = {
 		ctx.restore();
 	},
 
-	runPublicFrame(
+	runFrame(
 		snapshot: Snapshot, memory: Memory,
 		playerIndex: number, client: ClientGameEngine
 	) {

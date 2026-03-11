@@ -14,6 +14,7 @@ const MAX_FRAME_DURATION = 10;
 
 interface Input {
 	date: number;
+	user: number;
 	content: ArrayBuffer;
 }
 
@@ -53,7 +54,11 @@ export class ClientGameEngine {
 	}
 
 	addInput(data: ArrayBuffer) {
-		this.inputs.push({date: getTimestamp(), content: data});
+		this.inputs.push({
+			date: getTimestamp(),
+			user: this.playerIndex,
+			content: data
+		});
 		this.object.game.handleInput(this.snapshot, new DataReader(data), this.playerIndex);
 	}
 	
@@ -98,7 +103,7 @@ export class ClientGameEngine {
 
 	
 	runFrame(duration: number) {
-		this.object.runPublicFrame(this.snapshot, this.memory, this.playerIndex, this);
+		this.object.runFrame(this.snapshot, this.memory, this.playerIndex, this);
 
 		while (duration >= MAX_FRAME_DURATION) {
 			this.object.game.frame(this.snapshot, MAX_FRAME_DURATION);
@@ -109,6 +114,95 @@ export class ClientGameEngine {
 	}
 
 
+
+
+	private static readInputs(reader: DataReader) {
+		const length = reader.readUint32();
+		const newInputs = new Array<Input>(length);
+
+		for (let i = 0; i < length; i++) {
+			const date = reader.readUint32();
+			const byteLength = reader.readUint16();
+			const user = reader.readUint16();
+			const input: Input = {
+				date, user,
+				content: reader.readUint8Array(byteLength).buffer
+			};
+
+			newInputs[i] = input;
+		}
+
+		return newInputs;
+	}
+
+	private mergeInputs(newInputs: Input[]) {
+		const merged: Input[] = [];
+		
+		let i = 0;
+		let j = 0;
+
+		// Merge
+		while (i < this.inputs.length && j < newInputs.length) {
+			if (this.inputs[i].date <= newInputs[j].date) {
+				merged.push(this.inputs[i++]);
+			} else {
+				merged.push(newInputs[j++]);
+			}
+		}
+
+		while (i < this.inputs.length)
+			merged.push(this.inputs[i++]);
+
+		while (j < newInputs.length)
+			merged.push(newInputs[j++]);
+
+		return merged;
+	}
+
+	private simulateInputs(startDate: number, inputs: Input[]) {
+		if (inputs.length === 0) {
+			const date = getTimestamp();
+			this.object.game.frame(
+				this.snapshot,
+				date - startDate
+			);
+			
+		} else {
+			// Simulate until now
+			const lengthLimit = inputs.length - 1;
+
+			this.object.game.frame(
+				this.snapshot,
+				Math.max(inputs[0].date - startDate, 0)
+			);
+
+			for (let i = 0; i < lengthLimit; i++) {
+				const input = inputs[i];
+				let date = Math.max(startDate, input.date);
+
+				this.object.game.handleInput(
+					this.snapshot,
+					new DataReader(input.content),
+					input.user
+				);
+
+				this.object.game.frame(
+					this.snapshot,
+					Math.max(inputs[i+1].date - date, 0)
+				);
+			}
+
+			const date = getTimestamp();
+			this.object.game.handleInput(this.snapshot,
+				new DataReader(inputs[lengthLimit].content), this.playerIndex);
+
+			this.object.game.frame(
+				this.snapshot,
+				date - inputs[lengthLimit].date
+			);
+		}
+	}
+
 	handleNetwork(reader: DataReader | null): DataWriter {
 		if (reader) {
 			// Date
@@ -117,49 +211,14 @@ export class ClientGameEngine {
 			// Take status
 			this.object.game.readNetworkDesc(this.snapshot, reader);
 
-			if (this.inputs.length === 0) {
-				const date = getTimestamp();
-				console.log(date - this.lastSendDate);
-				this.object.game.frame(
-					this.snapshot,
-					date - this.lastSendDate
-				);
-				
-			} else {
-				// Simulate until now
-				const lengthLimit = this.inputs.length - 1;
-				console.log("RUN:", lengthLimit);
 
-				console.log(this.inputs[0].date - this.lastSendDate);
-				this.object.game.frame(
-					this.snapshot,
-					Math.max(this.inputs[0].date - this.lastSendDate, 0)
-				);
+			// Collect and merge inputs
+			const startDate = reader.readUint32();
+			const mergedInputs = this.mergeInputs(
+				ClientGameEngine.readInputs(reader));
 
-				for (let i = 0; i < lengthLimit; i++) {
-					const input = this.inputs[i];
-					let date = Math.max(this.lastSendDate, input.date);
-					console.log(this.inputs[i+1].date - date, this.snapshot.players[0].y);
-
-					this.object.game.handleInput(this.snapshot,
-						new DataReader(input.content), this.playerIndex);
-
-					this.object.game.frame(
-						this.snapshot,
-						Math.max(this.inputs[i+1].date - date, 0)
-					);
-				}
-	
-				const date = getTimestamp();
-				this.object.game.handleInput(this.snapshot,
-					new DataReader(this.inputs[lengthLimit].content), this.playerIndex);
-
-				console.log(date - this.inputs[lengthLimit].date);
-				this.object.game.frame(
-					this.snapshot,
-					date - this.inputs[lengthLimit].date
-				);
-			}
+			// Simulate inputs
+			this.simulateInputs(startDate, mergedInputs);
 
 		}
 

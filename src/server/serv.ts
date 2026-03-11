@@ -83,8 +83,6 @@ interface Lobby {
 }
 
 class Session {
-	static LATENCY = 10;
-
 	game: ServerGameEngine;
 	playerCount: number;
 	players: Player[];
@@ -122,10 +120,6 @@ class Session {
 			this.destroy();
 			return;
 		}*/
-
-		setTimeout(() => {
-			this.run();
-		}, Session.LATENCY);
 	}
 
 	destroy() {
@@ -344,11 +338,7 @@ function handleGameData(reader: DataReader, player: Player) {
 
 		const writer = session.game.handleMessage(reader, index);
 
-		console.log("recv");
-		setTimeout(() => {
-			console.log("send");
-			player.socket.send(writer.toArrayBuffer());
-		}, 1000);
+		player.socket.send(writer.toArrayBuffer());
 		return true;
 	}
 

@@ -4,6 +4,15 @@ import { GameInterface } from "../GameInterface";
 import { CLIENT_IDS } from "../net/CLIENT_IDS";
 import { getTimestamp } from "../getTimestamp";
 
+
+const DEBUG = false;
+function printDebug(...data: any[]) {
+	if (!DEBUG)
+		return;
+
+	console.log(...data);
+}
+
 type PlayerRanking = number[];
 
 interface Timeline {
@@ -25,7 +34,7 @@ export class ServerGameEngine {
 	private timelines: Timeline[];
 	private inputs: Input[] = [];
 	private sharedSnapshot: any;
-	private pureLeftFlag: number;
+	private readonly pureLeftFlag: number;
 
 
 	object: GameInterface<any>;
@@ -87,6 +96,7 @@ export class ServerGameEngine {
 			});
 		}
 
+		// Final flag
 		newInputs.push({
 			date: clientDate,
 			user,
@@ -125,66 +135,86 @@ export class ServerGameEngine {
 		inputs.splice(start, inputs.length - start, ...merged);
 	}
 
-	private simulateUntil(snapshot: any, date: number, removeFlag: number) {
-		// Move until client date
+	private simulate(snapshot: any,) {
 		const inputs = this.inputs;
+
+		if (!inputs)
+			return -1;
 
 		const inputLengthLimit = inputs.length - 1;
 		let i = 0;
 		for (; i < inputLengthLimit; i++) {
 			const current = inputs[i];
 			const next = inputs[i+1];
+			
+			if (next.leftFlag) {
+				break;
+			}
 
 			if (current.content) {
 				this.object.handleInput(snapshot, new DataReader(current.content), current.user);
 			}
-			
-			if (next.date >= date) {
-				break;
-			}
-			
-			current.leftFlag &= removeFlag;
+
 			this.runFrame(snapshot, next.date - current.date);
 		}
 
-		// Make last frame
-		const last = this.inputs[i];
-		if (last.content) {
-			this.object.handleInput(snapshot, new DataReader(last.content), last.user);
-		}
-		this.runFrame(snapshot, date - last.date);
+		return i;
 	}
+
+	private consumeEvents(removeFlag: number) {
+		for (const input of this.inputs)
+			input.leftFlag &= removeFlag;
+
+	}
+
+	private writeInputs(writer: DataWriter) {
+		const length = this.inputs.reduce((acc, i) => acc + (i.content?1:0), 0);
+
+		writer.writeUint32(length);
+
+		for (let input of this.inputs) {
+			if (input.content) {
+				writer.writeUint32(input.date);
+				writer.writeUint16(input.content.byteLength);
+				writer.writeUint16(input.user);
+				writer.addArrayBuffer(input.content);
+			}
+		}
+	}
+
 
 	handleMessage(reader: DataReader, user: number) {
 		const clientDate = reader.readUint32();
 
 		// Collect inputs
 		this.appendInputs(reader, user, clientDate);
-
+		
+		
 		// Get indice
 		const inputs = this.inputs;
-		let idx = 0;
-		while (idx < inputs.length && inputs[idx].leftFlag === 0) {idx++;}
-		
-		const removeFlag = ~(1<<user);
-		
-		// Get date
-		const timeline = this.timelines[user];
-		const snapshot = this.object.copySnapshot(this.sharedSnapshot);
-		this.simulateUntil(snapshot, clientDate, removeFlag);
-		
+		this.consumeEvents(~(1<<user));
+		const idx = this.simulate(this.sharedSnapshot);
+
 		// Delete old inputs and move shared snapshot
-		this.simulateUntil(this.sharedSnapshot, inputs[idx].date, removeFlag);
-		
 		if (idx > 0) {
+			printDebug("date: " + (Math.floor(inputs[idx].date/1000)%300).toString().padStart(3, '0'));
 			inputs.splice(0, idx);
 		}
+
+		printDebug("u" + user + " {");
+		inputs.forEach(x => printDebug("\t", (Math.floor(x.date/1000)%300).toString().padStart(3, '0'), "u"+x.user, x.leftFlag, x.content ? new Uint8Array(x.content).join("-") : null));
+		printDebug("}");
+
 		
 		// Send data
 		const writer = new DataWriter();
 		writer.writeInt8(CLIENT_IDS.GAME_DATA);
 		writer.writeUint32(getTimestamp());
-		this.object.writeNetworkDesc(snapshot, writer);
+		this.object.writeNetworkDesc(this.sharedSnapshot, writer);
+
+		printDebug("send", (Math.floor(inputs[0].date/1000)%300).toString().padStart(3, '0'));
+		writer.writeUint32(this.inputs[0].date);
+		this.writeInputs(writer);
 		
 		writer.writeInt8(CLIENT_IDS.FINISH);
 		return writer;

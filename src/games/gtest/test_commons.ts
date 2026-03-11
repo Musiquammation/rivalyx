@@ -14,6 +14,8 @@ class Player {
 class Snapshot {
 	players: Player[] = [
 		new Player(540, 290),
+		new Player(540, 2090),
+		
 	];
 }
 

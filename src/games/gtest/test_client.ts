@@ -17,6 +17,10 @@ interface Memory {
 	lastSentY: number;
 }
 
+
+(window as any).dirX = 0;
+(window as any).dirY = 0;
+
 export const test_client: ClientInterface<Snapshot, Memory> = {
 	game: test_game,
 	name: "Test",
@@ -96,7 +100,7 @@ export const test_client: ClientInterface<Snapshot, Memory> = {
 		ctx.restore();
 	},
 
-	runPublicFrame(
+	runFrame(
 		snapshot: Snapshot, memory: Memory,
 		playerIndex: number, client: ClientGameEngine
 	) {
@@ -112,6 +116,12 @@ export const test_client: ClientInterface<Snapshot, Memory> = {
 		}
 
 		let dir = client.getJoyStickDirection('move');
+
+		// TODO: remove this line
+		/*let dir = {
+			x: (window as any).dirX as number,
+			y: (window as any).dirY as number
+		}*/
 		if (!dir) {
 			dir = {x: 0, y: 0};
 		}
