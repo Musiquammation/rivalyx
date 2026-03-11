@@ -1,6 +1,3 @@
-const TILES_X = 9;
-const TILES_Y = 21;
-
 class Player {
 	x: number;
 	y: number;
@@ -14,20 +11,33 @@ class Player {
 	}
 }
 
+
+class ServData {
+
+}
+
 class Snapshot {
+	static TILES_X = 9;
+	static TILES_Y = 21;
+	static LIFETIME = 2.5;
+
 	players: Player[] = [
 		new Player(540, 290),
 		new Player(540, 2090)
 	];
 
-	tiles = new Uint8Array(TILES_Y * TILES_X);
+	tiles = new Float32Array(Snapshot.TILES_Y * Snapshot.TILES_X);
+
+	servData: ServData | null;
+
+	constructor(isServer: boolean) {
+		this.servData = isServer ? new ServData() : null;
+		this.tiles.fill(Snapshot.LIFETIME);
+	}
 }
 
 export const gpackice = {
 	Player,
 	Snapshot,
-
-	TILES_X,
-	TILES_Y,
 };
 

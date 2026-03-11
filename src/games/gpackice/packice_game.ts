@@ -8,31 +8,24 @@ import { gpackice } from "./packice_commons";
 const Snapshot = gpackice.Snapshot;
 type Snapshot = InstanceType<typeof gpackice.Snapshot>;
 
-const PLAYER_SPEED = 0.1;
+const PLAYER_SPEED = 0.4;
+
+
+function getIdx(x: number, y: number) {
+	if (x < 0 || y < 0 || x >= Snapshot.TILES_X || y >= Snapshot.TILES_Y)
+		return -1;
+
+	return y * Snapshot.TILES_X + x;
+}
+
 
 export const packice_game: GameInterface<Snapshot> = {
 	playerCount: 2,
 
-	createSnapshot() {
-		const snapshot = new Snapshot();
-		snapshot.tiles.fill(255);
-		return snapshot;
+	createSnapshot(isServer: boolean) {
+		return new Snapshot(isServer);
 	},
 
-	copySnapshot(src: Snapshot): Snapshot {
-		const dst = new Snapshot();
-
-		for (let i = 0; i < src.players.length; i++) {
-			dst.players[i].x = src.players[i].x;
-			dst.players[i].y = src.players[i].y;
-			dst.players[i].vx = src.players[i].vx;
-			dst.players[i].vy = src.players[i].vy;
-		}
-
-		console.log("copy", src.players[0].y);
-
-		return dst;
-	},
 
 	extractInput(reader: DataReader): ArrayBuffer {
 		const writer = new DataWriter();
@@ -49,11 +42,26 @@ export const packice_game: GameInterface<Snapshot> = {
 		player.vy = data.readFloat32();
 	},
 
-	frame(snapshot: Snapshot, speed: number) {
+
+	frame(snapshot: Snapshot, speed: number, isServer: boolean) {
 		for (let player of snapshot.players) {
 			player.x += player.vx * speed*PLAYER_SPEED;
 			player.y += player.vy * speed*PLAYER_SPEED;
+
+			const x = Math.floor((player.x -  90) / 100);
+			const y = Math.floor((player.y - 140) / 100);
+
+			const p = getIdx(x, y);
+			if (p >= 0) {
+				const v = snapshot.tiles[p];
+				if (v > 0) {
+					snapshot.tiles[p] = v - speed;
+					continue;
+				}
+			}
+
 		}
+
 	},
 
 	readNetworkDesc(snapshot: Snapshot, reader: DataReader) {
@@ -63,8 +71,6 @@ export const packice_game: GameInterface<Snapshot> = {
 			player.vx = reader.readFloat32();
 			player.vy = reader.readFloat32();
 		}
-
-		console.log("shared:", snapshot.players[0].y);
 	},
 
 	writeNetworkDesc(snapshot: Snapshot, writer: DataWriter) {

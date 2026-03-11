@@ -10,8 +10,8 @@ import { DataWriter } from "../../net/DataWriter";
 const Snapshot = gpackice.Snapshot;
 type Snapshot = InstanceType<typeof gpackice.Snapshot>;
 
-const TILES_X = gpackice.TILES_X;
-const TILES_Y = gpackice.TILES_Y;
+const TILES_X = Snapshot.TILES_X;
+const TILES_Y = Snapshot.TILES_Y;
 
 interface Memory {
 	playerDirections: number[];
@@ -80,7 +80,7 @@ export const packice_client: ClientInterface<Snapshot, Memory> = {
 			for (let x = 0; x < TILES_X; x++) {
 				const line = snapshot.tiles[tile];
 				ctx.save();
-				ctx.globalAlpha = line/255;
+				ctx.globalAlpha = line / Snapshot.LIFETIME;
 				ctx.drawImage(floorImg, 100*x + 90, 100*y + 140, 100, 100);
 				ctx.restore();
 				tile++;

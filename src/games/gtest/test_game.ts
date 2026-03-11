@@ -8,27 +8,14 @@ import { gtest } from "./test_commons";
 const Snapshot = gtest.Snapshot;
 type Snapshot = InstanceType<typeof gtest.Snapshot>;
 
-const PLAYER_SPEED = 0.6;
+const PLAYER_SPEED = 0.1;
 
 export const test_game: GameInterface<Snapshot> = {
 	playerCount: 2,
 
-	createSnapshot() {
+	createSnapshot(isServer: boolean) {
 		const snapshot = new Snapshot();
 		return snapshot;
-	},
-
-	copySnapshot(src: Snapshot): Snapshot {
-		const dst = new Snapshot();
-
-		for (let i = 0; i < src.players.length; i++) {
-			dst.players[i].x = src.players[i].x;
-			dst.players[i].y = src.players[i].y;
-			dst.players[i].vx = src.players[i].vx;
-			dst.players[i].vy = src.players[i].vy;
-		}
-
-		return dst;
 	},
 
 	extractInput(reader: DataReader): ArrayBuffer {
@@ -46,7 +33,7 @@ export const test_game: GameInterface<Snapshot> = {
 		player.vy = data.readFloat32();
 	},
 
-	frame(snapshot: Snapshot, speed: number) {
+	frame(snapshot: Snapshot, speed: number, isServer: boolean) {
 		for (let player of snapshot.players) {
 			player.x += player.vx * speed*PLAYER_SPEED;
 			player.y += player.vy * speed*PLAYER_SPEED;
@@ -60,8 +47,6 @@ export const test_game: GameInterface<Snapshot> = {
 			player.vx = reader.readFloat32();
 			player.vy = reader.readFloat32();
 		}
-
-		console.log("shared:", snapshot.players[0].y);
 	},
 
 	writeNetworkDesc(snapshot: Snapshot, writer: DataWriter) {

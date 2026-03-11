@@ -5,11 +5,10 @@ import { DataWriter } from "./net/DataWriter";
 export interface GameInterface<Snapshot> {
 	playerCount: number;
 
-	createSnapshot(): Snapshot;
-	copySnapshot(snapshot: Snapshot): Snapshot;
+	createSnapshot(isServer: boolean): Snapshot;
 	extractInput(reader: DataReader): ArrayBuffer;
 	handleInput(snapshot: Snapshot, data: DataReader, user: number): void;
-	frame(snapshot: Snapshot, speed: number): void;
+	frame(snapshot: Snapshot, speed: number, isServer: boolean): void;
 
 	readNetworkDesc(snapshot: Snapshot, data: DataReader): void;
 	writeNetworkDesc(snapshot: Snapshot, writer: DataWriter): void;

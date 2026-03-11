@@ -36,7 +36,7 @@ export class ClientGameEngine {
 	constructor(imageLoader: ImageLoader, object: ClientInterface<any, any>) {
 		this.imageLoader = imageLoader;
 		this.object = object;
-		this.snapshot = object.game.createSnapshot();
+		this.snapshot = object.game.createSnapshot(false);
 	}
 	
 
@@ -103,14 +103,17 @@ export class ClientGameEngine {
 
 	
 	runFrame(duration: number) {
+		if (duration <= 0)
+			return;
+
 		this.object.runFrame(this.snapshot, this.memory, this.playerIndex, this);
 
 		while (duration >= MAX_FRAME_DURATION) {
-			this.object.game.frame(this.snapshot, MAX_FRAME_DURATION);
+			this.object.game.frame(this.snapshot, MAX_FRAME_DURATION, false);
 			duration -= MAX_FRAME_DURATION;
 		}
 
-		this.object.game.frame(this.snapshot, duration);
+		this.object.game.frame(this.snapshot, duration, false);
 	}
 
 
@@ -162,23 +165,21 @@ export class ClientGameEngine {
 	private simulateInputs(startDate: number, inputs: Input[]) {
 		if (inputs.length === 0) {
 			const date = getTimestamp();
-			this.object.game.frame(
-				this.snapshot,
-				date - startDate
-			);
+			this.runFrame(date - startDate);
 			
 		} else {
 			// Simulate until now
 			const lengthLimit = inputs.length - 1;
 
-			this.object.game.frame(
-				this.snapshot,
-				Math.max(inputs[0].date - startDate, 0)
-			);
+			this.runFrame(inputs[0].date - startDate);
 
 			for (let i = 0; i < lengthLimit; i++) {
 				const input = inputs[i];
-				let date = Math.max(startDate, input.date);
+
+				const date = input.date;
+				if (date < startDate) {
+					console.warn("Input previous startDate");
+				}
 
 				this.object.game.handleInput(
 					this.snapshot,
@@ -186,20 +187,14 @@ export class ClientGameEngine {
 					input.user
 				);
 
-				this.object.game.frame(
-					this.snapshot,
-					Math.max(inputs[i+1].date - date, 0)
-				);
+				this.runFrame(inputs[i+1].date - date);
 			}
 
 			const date = getTimestamp();
 			this.object.game.handleInput(this.snapshot,
 				new DataReader(inputs[lengthLimit].content), this.playerIndex);
 
-			this.object.game.frame(
-				this.snapshot,
-				date - inputs[lengthLimit].date
-			);
+			this.runFrame(date - inputs[lengthLimit].date);
 		}
 	}
 

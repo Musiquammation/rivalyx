@@ -5,7 +5,7 @@ import { CLIENT_IDS } from "../net/CLIENT_IDS";
 import { getTimestamp } from "../getTimestamp";
 
 
-const DEBUG = false;
+const DEBUG = true;
 function printDebug(...data: any[]) {
 	if (!DEBUG)
 		return;
@@ -41,7 +41,7 @@ export class ServerGameEngine {
 
 	constructor(object: GameInterface<any>) {
 		this.object = object;
-		this.sharedSnapshot = object.createSnapshot();
+		this.sharedSnapshot = object.createSnapshot(true);
 
 		const count = object.playerCount;
 		const timelines: Timeline[] = [];
@@ -135,7 +135,7 @@ export class ServerGameEngine {
 		inputs.splice(start, inputs.length - start, ...merged);
 	}
 
-	private simulate(snapshot: any,) {
+	private simulate(snapshot: any) {
 		const inputs = this.inputs;
 
 		if (!inputs)
@@ -222,10 +222,10 @@ export class ServerGameEngine {
 
 	private runFrame(snapshot: any, duration: number) {
 		while (duration >= MAX_FRAME_DURATION) {
-			this.object.frame(snapshot, MAX_FRAME_DURATION);
+			this.object.frame(snapshot, MAX_FRAME_DURATION, true);
 			duration -= MAX_FRAME_DURATION;
 		}
 
-		this.object.frame(snapshot, duration);
+		this.object.frame(snapshot, duration, true);
 	}
 }
