@@ -1,37 +1,68 @@
+import { GameInterface } from "../GameInterface";
+import { getTimestamp } from "../getTimestamp";
 import { DataReader } from "../net/DataReader";
 import { DataWriter } from "../net/DataWriter";
+import { SERVER_IDS } from "../net/SERVER_IDS";
 import { Button } from "./Button";
+import { ClientInterface } from "./ClientInterface";
 import { ImageLoader } from "./ImageLoader";
 import { Joystick, JoystickPlacement } from "./Joystick";
 
 
+const MAX_FRAME_DURATION = 10;
+
+
+interface Input {
+	date: number;
+	user: number;
+	content: ArrayBuffer;
+}
 
 
 
-export abstract class ClientGameEngine {
+export class ClientGameEngine {
 	joysticks = new Set<Joystick>();
 	buttons = new Set<Button>();
 	playerIndex = -1;
+	lastSendDate = -Infinity;
 
 	private canvas: HTMLCanvasElement | null = null;
-	protected imageLoader: ImageLoader;
+	private object: ClientInterface<any, any>;
+	private snapshot: any;
+	private memory: any;
+	private imageLoader: ImageLoader;
+	private inputs: Input[] = [];
 
-	constructor(imageLoader: ImageLoader) {
+	constructor(imageLoader: ImageLoader, object: ClientInterface<any, any>) {
 		this.imageLoader = imageLoader;
+		this.object = object;
+		this.snapshot = object.game.createSnapshot();
+	}
+	
+
+	start() {
+		this.memory = this.object.createMemory(
+			this.snapshot, this, this.playerIndex);
 	}
 
-	abstract start(): void;
-	abstract getGameSize(): {width: number, height: number};
-	abstract getTimer(): number;
-	
-	protected abstract draw(
-		ctx: CanvasRenderingContext2D,
-		screenWidth: number,
-		screenHeight: number,
-		applyToScreen: ()=>void
-	): void;
+    getGameSize() {
+		return this.object.gameSize;
+	}
 
-	drawGame(ctx: CanvasRenderingContext2D) {
+	getTimer() {
+		return this.object.getTimer(this.snapshot);
+	}
+
+	addInput(data: ArrayBuffer) {
+		this.inputs.push({
+			date: getTimestamp(),
+			user: this.playerIndex,
+			content: data
+		});
+		this.object.game.handleInput(this.snapshot, new DataReader(data), this.playerIndex);
+	}
+	
+	draw(ctx: CanvasRenderingContext2D) {
 		const applyToScreen = () => {
 			const gameSize = this.getGameSize();
 			const screenWidth = this.canvas!.width;
@@ -49,19 +80,172 @@ export abstract class ClientGameEngine {
 		};
 
 		
-		this.draw(ctx, this.canvas!.width, this.canvas!.height, applyToScreen);
+		this.object.draw(this.snapshot, this.memory, ctx,
+			this.canvas!.width, this.canvas!.height,
+			this.imageLoader, this.playerIndex, applyToScreen);
 	}
 	
-	abstract clientNetwork(reader: DataReader | null): DataWriter;
 
-	protected handleSubTouchEvent(
-		kind: 'touchstart' | 'touchmove' | 'touchend',
-		event: TouchEvent,
-		screenWidth: number,
-		screenHeight: number,
-		canvasWidth: number,
-		canvasHeight: number
-	) {}
+	private getFirstInput(date: number): number {
+		let l = 0;
+		let r = this.inputs.length;
+
+		while (l < r) {
+			const mid = (l + r) >>> 1;
+			if (this.inputs[mid].date < date)
+				l = mid + 1;
+			else
+				r = mid;
+		}
+		return l;
+	}
+
+
+	
+	runFrame(duration: number) {
+		this.object.runFrame(this.snapshot, this.memory, this.playerIndex, this);
+
+		while (duration >= MAX_FRAME_DURATION) {
+			this.object.game.frame(this.snapshot, MAX_FRAME_DURATION);
+			duration -= MAX_FRAME_DURATION;
+		}
+
+		this.object.game.frame(this.snapshot, duration);
+	}
+
+
+
+
+	private static readInputs(reader: DataReader) {
+		const length = reader.readUint32();
+		const newInputs = new Array<Input>(length);
+
+		for (let i = 0; i < length; i++) {
+			const date = reader.readUint32();
+			const byteLength = reader.readUint16();
+			const user = reader.readUint16();
+			const input: Input = {
+				date, user,
+				content: reader.readUint8Array(byteLength).buffer
+			};
+
+			newInputs[i] = input;
+		}
+
+		return newInputs;
+	}
+
+	private mergeInputs(newInputs: Input[]) {
+		const merged: Input[] = [];
+		
+		let i = 0;
+		let j = 0;
+
+		// Merge
+		while (i < this.inputs.length && j < newInputs.length) {
+			if (this.inputs[i].date <= newInputs[j].date) {
+				merged.push(this.inputs[i++]);
+			} else {
+				merged.push(newInputs[j++]);
+			}
+		}
+
+		while (i < this.inputs.length)
+			merged.push(this.inputs[i++]);
+
+		while (j < newInputs.length)
+			merged.push(newInputs[j++]);
+
+		return merged;
+	}
+
+	private simulateInputs(startDate: number, inputs: Input[]) {
+		if (inputs.length === 0) {
+			const date = getTimestamp();
+			this.object.game.frame(
+				this.snapshot,
+				date - startDate
+			);
+			
+		} else {
+			// Simulate until now
+			const lengthLimit = inputs.length - 1;
+
+			this.object.game.frame(
+				this.snapshot,
+				Math.max(inputs[0].date - startDate, 0)
+			);
+
+			for (let i = 0; i < lengthLimit; i++) {
+				const input = inputs[i];
+				let date = Math.max(startDate, input.date);
+
+				this.object.game.handleInput(
+					this.snapshot,
+					new DataReader(input.content),
+					input.user
+				);
+
+				this.object.game.frame(
+					this.snapshot,
+					Math.max(inputs[i+1].date - date, 0)
+				);
+			}
+
+			const date = getTimestamp();
+			this.object.game.handleInput(this.snapshot,
+				new DataReader(inputs[lengthLimit].content), this.playerIndex);
+
+			this.object.game.frame(
+				this.snapshot,
+				date - inputs[lengthLimit].date
+			);
+		}
+	}
+
+	handleNetwork(reader: DataReader | null): DataWriter {
+		if (reader) {
+			// Date
+			const servDate = reader.readUint32();
+
+			// Take status
+			this.object.game.readNetworkDesc(this.snapshot, reader);
+
+
+			// Collect and merge inputs
+			const startDate = reader.readUint32();
+			const mergedInputs = this.mergeInputs(
+				ClientGameEngine.readInputs(reader));
+
+			// Simulate inputs
+			this.simulateInputs(startDate, mergedInputs);
+
+		}
+
+		const writer = new DataWriter();
+		writer.writeUint8(SERVER_IDS.GAME_DATA);
+		writer.writeUint32(getTimestamp());
+		
+		// Send inputs
+		for (let input of this.inputs) {
+			writer.writeUint32(input.date);
+			writer.addArrayBuffer(input.content);
+		}
+
+		writer.writeUint32(0); // final date
+		writer.writeUint8(SERVER_IDS.FINISH);
+		this.inputs.length = 0; // empty inputs
+
+
+		this.lastSendDate = getTimestamp();
+		return writer;
+	}
+
+
+
+
+
+
 
 	setCanvas(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
@@ -74,7 +258,8 @@ export abstract class ClientGameEngine {
 		const screenHeight = window.innerHeight;
 		const canvasWidth = this.canvas.width;
 		const canvasHeight = this.canvas.height;
-		this.handleSubTouchEvent(kind, event, screenWidth, screenHeight, canvasWidth, canvasHeight);
+		this.object.handleSubTouchEvent(this.snapshot, kind, event,
+			screenWidth, screenHeight, canvasWidth, canvasHeight);
 
 		// Check if any touch is on an interactive element (button, link, etc.)
 		let shouldPreventDefault = true;
@@ -169,11 +354,11 @@ export abstract class ClientGameEngine {
 	}
 
 
-	protected appendButton(button: Button) {
+	appendButton(button: Button) {
 		this.buttons.add(button);
 	}
 
-	protected removeButton(button: Button) {
+	removeButton(button: Button) {
 		this.buttons.delete(button);
 	}
 
@@ -197,17 +382,17 @@ export abstract class ClientGameEngine {
 		}
 	}
 
-	protected appendJoystick(joystick: Joystick) {
+	appendJoystick(joystick: Joystick) {
 		joystick.stickX = 0;
 		joystick.stickY = 0;
 		return this.joysticks.add(joystick);
 	}
 	
-	protected removeJoystick(joystick: Joystick) {
+	removeJoystick(joystick: Joystick) {
 		return this.joysticks.delete(joystick);
 	}
 
-	protected getJoyStickDirection(label: string) {
+	getJoyStickDirection(label: string) {
 		const joystick = Array.from(this.joysticks).find(j => j.label === label);
 		if (!joystick) return null;
 		return { x: joystick.stickX, y: joystick.stickY };
@@ -290,3 +475,4 @@ export abstract class ClientGameEngine {
 		}
 	}
 }
+

@@ -1,4 +1,3 @@
-
 export class DataReader {
 	private view: DataView;
 	private offset = 0;

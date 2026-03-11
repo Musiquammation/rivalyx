@@ -135,6 +135,28 @@ export class DataWriter {
 		this.offset += length;
 	}
 
+	addDataView(view: DataView) {
+		const length = view.byteLength;
+		if (length === 0) return;
+
+		this.checkSize(length);
+		new Uint8Array(this.buffer, this.offset, length)
+			.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+
+		this.offset += length;
+	}
+
+	addArrayBuffer(buffer: ArrayBuffer) {
+		const length = buffer.byteLength;
+		if (length === 0) return;
+
+		this.checkSize(length);
+		new Uint8Array(this.buffer, this.offset, length)
+			.set(new Uint8Array(buffer));
+
+		this.offset += length;
+	}
+
 	addUint8Array(array: Uint8Array) {
 		const length = array.length;
 		if (length === 0) return;
