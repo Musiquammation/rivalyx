@@ -343,7 +343,12 @@ function handleGameData(reader: DataReader, player: Player) {
 			continue;
 
 		const writer = session.game.handleMessage(reader, index);
-		player.socket.send(writer.toArrayBuffer());
+
+		console.log("recv");
+		setTimeout(() => {
+			console.log("send");
+			player.socket.send(writer.toArrayBuffer());
+		}, 1000);
 		return true;
 	}
 

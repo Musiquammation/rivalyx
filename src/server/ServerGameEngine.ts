@@ -69,7 +69,6 @@ export class ServerGameEngine {
 		// # Read inputs #
 		while (true) {
 			const date = reader.readUint32();
-			console.log(date);
 			if (date === 0)
 				break;
 
@@ -127,8 +126,6 @@ export class ServerGameEngine {
 	}
 
 	private simulateUntil(snapshot: any, date: number, removeFlag: number) {
-		console.log("simulation {");
-
 		// Move until client date
 		const inputs = this.inputs;
 
@@ -142,7 +139,6 @@ export class ServerGameEngine {
 				this.object.handleInput(snapshot, new DataReader(current.content), current.user);
 			}
 			
-			console.log("\t" + current.date + (current.content ? "" : " (empty)"));
 			if (next.date >= date) {
 				break;
 			}
@@ -154,17 +150,12 @@ export class ServerGameEngine {
 		// Make last frame
 		const last = this.inputs[i];
 		if (last.content) {
-			console.log("\t" + last.date);
 			this.object.handleInput(snapshot, new DataReader(last.content), last.user);
 		}
-		console.log("final ", date - last.date);
 		this.runFrame(snapshot, date - last.date);
-
-		console.log("}");
 	}
 
 	handleMessage(reader: DataReader, user: number) {
-		console.log("AS USER:", user);
 		const clientDate = reader.readUint32();
 
 		// Collect inputs
@@ -183,7 +174,6 @@ export class ServerGameEngine {
 		this.simulateUntil(snapshot, clientDate, removeFlag);
 		
 		// Delete old inputs and move shared snapshot
-		console.log("idx", idx);
 		this.simulateUntil(this.sharedSnapshot, inputs[idx].date, removeFlag);
 		
 		if (idx > 0) {
