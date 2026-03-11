@@ -1,6 +1,3 @@
-const TILES_X = 9;
-const TILES_Y = 21;
-
 class Player {
 	x: number;
 	y: number;
@@ -15,19 +12,20 @@ class Player {
 }
 
 class Snapshot {
+	static TILES_X = 9;
+	static TILES_Y = 21;
+	static LIFETIME = 2.5;
+
 	players: Player[] = [
 		new Player(540, 290),
 		new Player(540, 2090)
 	];
 
-	tiles = new Uint8Array(TILES_Y * TILES_X);
+	tiles = new Uint8Array(Snapshot.TILES_Y * Snapshot.TILES_X);
 }
 
 export const gpackice = {
 	Player,
 	Snapshot,
-
-	TILES_X,
-	TILES_Y,
 };
 

@@ -36,7 +36,7 @@ export class ClientGameEngine {
 	constructor(imageLoader: ImageLoader, object: ClientInterface<any, any>) {
 		this.imageLoader = imageLoader;
 		this.object = object;
-		this.snapshot = object.game.createSnapshot();
+		this.snapshot = object.game.createSnapshot(false);
 	}
 	
 

@@ -178,20 +178,6 @@ function handleGameData(reader: DataReader) {
 
 	const bufferToSend = globalGameEngine.handleNetwork(reader).toArrayBuffer();
 	if (diff >= 0) {
-		/// TODO: remove this functino
-		function debug_send() {
-			if ((window as any).debugSend) {
-				lastPackageSendTimestamp = Date.now();
-				socket?.send(bufferToSend);
-				(window as any).debugSend = false;
-				return;
-			}
-
-			setTimeout(debug_send, 100);
-		}
-
-		// debug_send();
-
 		setTimeout(() => {
 			lastPackageSendTimestamp = Date.now();
 			socket?.send(bufferToSend);

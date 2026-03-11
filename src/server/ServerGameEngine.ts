@@ -41,7 +41,7 @@ export class ServerGameEngine {
 
 	constructor(object: GameInterface<any>) {
 		this.object = object;
-		this.sharedSnapshot = object.createSnapshot();
+		this.sharedSnapshot = object.createSnapshot(true);
 
 		const count = object.playerCount;
 		const timelines: Timeline[] = [];

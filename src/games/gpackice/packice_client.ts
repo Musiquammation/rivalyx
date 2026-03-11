@@ -10,8 +10,8 @@ import { DataWriter } from "../../net/DataWriter";
 const Snapshot = gpackice.Snapshot;
 type Snapshot = InstanceType<typeof gpackice.Snapshot>;
 
-const TILES_X = gpackice.TILES_X;
-const TILES_Y = gpackice.TILES_Y;
+const TILES_X = Snapshot.TILES_X;
+const TILES_Y = Snapshot.TILES_Y;
 
 interface Memory {
 	playerDirections: number[];
