@@ -8,7 +8,7 @@ import { gtest } from "./test_commons";
 const Snapshot = gtest.Snapshot;
 type Snapshot = InstanceType<typeof gtest.Snapshot>;
 
-const PLAYER_SPEED = 0.1;
+const PLAYER_SPEED = 0.4;
 
 export const test_game: GameInterface<Snapshot> = {
 	playerCount: 2,
