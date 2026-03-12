@@ -315,26 +315,31 @@ function handleGameData(reader: DataReader, player: Player) {
 	if (!session)
 		return false;
 
-	const writer = new DataWriter();
-	session.game.handleMessage(reader, writer, player.index);
+	const msg = session.game.handleMessage(reader, player.index);
+	if (msg) {
+		player.socket.send(msg.toArrayBuffer());		
+	}
+
 
 	// Send leaderboard
 	const leaderboard = session.game.getLeaderboard();
 	if (leaderboard) {
+		const writer = new DataWriter();
 		writer.writeUint8(CLIENT_IDS.END_GAME);
 		writer.writeInt16(leaderboard.length);
 		for (let i of leaderboard) {
 			writer.writeInt16(i);
 		}
 
+		writer.writeUint8(CLIENT_IDS.FINISH);
+		
 		const buffer = writer.toArrayBuffer();
 		for (let player of session.players) {
 			player.socket.send(buffer);
 		}
+
 	}
 
-	writer.writeUint8(CLIENT_IDS.FINISH);
-	player.socket.send(writer.toArrayBuffer());		
 	return true;
 }
 

@@ -81,7 +81,6 @@ function handleMessage(data: ArrayBuffer) {
 	
 	while (true) {
 		const messageId = reader.readUint8();
-		
 
 		if (messageId === CLIENT_IDS.FINISH) {
 			break;

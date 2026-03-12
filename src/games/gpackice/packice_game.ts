@@ -68,7 +68,7 @@ export const packice_game: GameInterface<Snapshot> = {
 		}
 
 
-		// Reduce
+		// Reduce tiles
 		for (let i = 0; i < snapshot.tiles.length; i++) {
 			const tile = snapshot.tiles[i];
 			if (tile > 0 && (tile % TILE_MODULO) !== 0) {
@@ -98,6 +98,7 @@ export const packice_game: GameInterface<Snapshot> = {
 			player.y = reader.readFloat32();
 			player.vx = reader.readFloat32();
 			player.vy = reader.readFloat32();
+			player.alive = reader.readInt8() != 0;
 		}
 
 		// Read tiles
@@ -114,6 +115,7 @@ export const packice_game: GameInterface<Snapshot> = {
 			writer.writeFloat32(player.y);
 			writer.writeFloat32(player.vx);
 			writer.writeFloat32(player.vy);
+			writer.writeInt8(player.alive?1:0);
 		}
 	}
 }

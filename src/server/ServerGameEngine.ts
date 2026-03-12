@@ -188,14 +188,15 @@ export class ServerGameEngine {
 	}
 
 
-	handleMessage(reader: DataReader, writer: DataWriter , user: number) {
+	handleMessage(reader: DataReader, user: number) {
+		const writer = new DataWriter();
 		const clientDate = reader.readUint32();
 
 		// Collect inputs
 		this.appendInputs(reader, user, clientDate);
 		
 		if (this.dead)
-			return;
+			return null;
 
 		this.update(~(1<<user));
 
@@ -206,6 +207,9 @@ export class ServerGameEngine {
 
 		writer.writeUint32(this.inputs[0].date);
 		this.writeInputs(writer);
+		
+		writer.writeInt8(CLIENT_IDS.FINISH);
+		return writer;
 	}
 
 	disconnectPlayer(user: number) {
