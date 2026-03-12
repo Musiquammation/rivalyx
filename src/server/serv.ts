@@ -49,11 +49,22 @@ const wss = new WebSocketServer({ server });
 
 interface Player {
 	socket: WebSocket;
+	index: number;
+	session: Session | null;
+}
+
+function appendPlayerSession(player: Player, session: Session, index: number) {
+	if (player.index >= 0 || player.session) {
+		throw new Error("Player already in a session");
+	}
+
+	player.index = index;
+	player.session = session;
 }
 
 
 wss.on("connection", (socket: WebSocket) => {
-	const player: Player = {socket};
+	const player: Player = {socket, index: -1, session: null};
 
 
 	socket.on("message", (data: Buffer) => {
@@ -84,49 +95,13 @@ interface Lobby {
 
 class Session {
 	game: ServerGameEngine;
-	playerCount: number;
 	players: Player[];
+	readonly hash: string;
 
-	constructor(game: ServerGameEngine, players: Player[]) {
+	constructor(game: ServerGameEngine, players: Player[], hash: string) {
 		this.game = game;
 		this.players = players;
-		this.playerCount = players.length;
-	}
-
-	run() {
-		if (this.players.length === 0) {
-			console.log("Game abandonned...");
-			this.destroy();
-			return;
-		}
-
-		/*const ranking = this.game.frame();
-		if (ranking) {
-			const writer = new DataWriter();
-			writer.writeUint8(CLIENT_IDS.END_GAME);
-			writer.writeInt16(this.playerCount);
-			for (let i of ranking) {
-				writer.writeInt16(i);
-			}
-
-			writer.writeUint8(CLIENT_IDS.FINISH);
-
-			const buffer = writer.toArrayBuffer();
-			for (let player of this.players) {
-				player.socket.send(buffer);
-			}
-
-			console.log("Game finished!");
-			this.destroy();
-			return;
-		}*/
-	}
-
-	destroy() {
-		const index = sessions.indexOf(this);
-		if (index >= 0) {
-			sessions.splice(index, 1);
-		}
+		this.hash = hash;
 	}
 }
 
@@ -217,9 +192,10 @@ function handleCreateLobby(reader: DataReader, player: Player) {
 		writer.writeInt32(CLIENT_IDS.FINISH);
 		
 		const engine = new ServerGameEngine(SERV_DESCRIPTIONS[gameId]);
-		const session = new Session(engine, [player]);
+		const session = new Session(engine, [player], hash);
 		sessions.push(session);
-		session.run();
+
+		appendPlayerSession(player, session, 0);
 
 		player.socket.send(writer.toArrayBuffer());
 		return;
@@ -290,9 +266,12 @@ function handleLobbyJoin(reader: DataReader, player: Player) {
 
 		const engine = new ServerGameEngine(gameDesc);
 
-		const session = new Session(engine, lobby.players);
+		const session = new Session(engine, lobby.players, lobby.hash);
 		sessions.push(session);
-		session.run();
+
+		for (let i = 0; i < lobby.players.length; i++) {
+			appendPlayerSession(lobby.players[i], session, i);
+		}
 
 		lobbies.delete(lobbyHash);
 	
@@ -331,18 +310,32 @@ function handleSeekLobby(reader: DataReader, player: Player) {
 }
 
 function handleGameData(reader: DataReader, player: Player) {
-	for (let session of Array.from(sessions.values())) {
-		const index = session.players.indexOf(player);
-		if (index < 0)
-			continue;
+	const session = player.session;
 
-		const writer = session.game.handleMessage(reader, index);
+	if (!session)
+		return false;
 
-		player.socket.send(writer.toArrayBuffer());
-		return true;
+	const writer = new DataWriter();
+	session.game.handleMessage(reader, writer, player.index);
+
+	// Send leaderboard
+	const leaderboard = session.game.getLeaderboard();
+	if (leaderboard) {
+		writer.writeUint8(CLIENT_IDS.END_GAME);
+		writer.writeInt16(leaderboard.length);
+		for (let i of leaderboard) {
+			writer.writeInt16(i);
+		}
+
+		const buffer = writer.toArrayBuffer();
+		for (let player of session.players) {
+			player.socket.send(buffer);
+		}
 	}
 
-	return false;
+	writer.writeUint8(CLIENT_IDS.FINISH);
+	player.socket.send(writer.toArrayBuffer());		
+	return true;
 }
 
 
@@ -385,6 +378,12 @@ function removeClientFromSessions(player: Player) {
 		const playerIndex = session.players.indexOf(player);
 		if (playerIndex !== -1) {
 			session.players.splice(playerIndex, 1);
+			session.game.disconnectPlayer(playerIndex);
+		}
+
+		if (session.players.length === 0) {
+			console.log("Game abandonned...");
+			sessions.splice(i, 1);
 		}
 	}
 }

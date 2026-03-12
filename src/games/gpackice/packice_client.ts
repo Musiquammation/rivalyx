@@ -95,8 +95,8 @@ export const packice_client: ClientInterface<Snapshot, Memory> = {
 			const player = snapshot.players[i];
 			const px = player.x;
 			const py = player.y;
-			const size = 100;
-			const half = size / 2;
+			const half = Snapshot.PLAYER_RADIUS;
+			const size = half*2;
 
 			ctx.save();
 			ctx.translate(px, py);

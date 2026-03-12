@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/server/serv.ts",
+    "server": "ts-node-dev --respawn --transpile-only src/server/serv.ts",
     "buildClient": "vite build --config vite.client.config.ts",
     "start": "node dist/server/serv.js",
     "client": "vite src/client"

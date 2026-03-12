@@ -18,6 +18,7 @@ export const test_game: GameInterface<Snapshot> = {
 		return snapshot;
 	},
 
+
 	extractInput(reader: DataReader): ArrayBuffer {
 		const writer = new DataWriter();
 		const x = reader.readFloat32();
@@ -33,11 +34,19 @@ export const test_game: GameInterface<Snapshot> = {
 		player.vy = data.readFloat32();
 	},
 
-	frame(snapshot: Snapshot, speed: number, isServer: boolean) {
+	frame(snapshot: Snapshot, speed: number) {
 		for (let player of snapshot.players) {
 			player.x += player.vx * speed*PLAYER_SPEED;
 			player.y += player.vy * speed*PLAYER_SPEED;
 		}
+	},
+
+	getLeaderboard(snapshot: Snapshot) {
+		return null;
+	},
+
+	killPlayer(snapshot: Snapshot, user: number) {
+
 	},
 
 	readNetworkDesc(snapshot: Snapshot, reader: DataReader) {

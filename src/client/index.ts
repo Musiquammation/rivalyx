@@ -256,7 +256,7 @@ function handleEndGame(reader: DataReader) {
 				: "anonymous";
 			return name;
 		});
-		leaderboardEntries.push(`#${pos} ${playerNames.join(", ")}`);
+		leaderboardEntries.push(`#${pos+1} ${playerNames.join(", ")}`);
 	}
 
 	// Display the end game menu
@@ -429,7 +429,7 @@ function showEndGameMenu(playerPosition: number, leaderboardText: string) {
 	
 	if (endGameMenu) {
 		if (endGamePlayerPosition) {
-			endGamePlayerPosition.textContent = `#${playerPosition}`;
+			endGamePlayerPosition.textContent = `Top #${playerPosition+1}`;
 		}
 		if (endGameLeaderboard) {
 			endGameLeaderboard.textContent = leaderboardText;

@@ -9,21 +9,15 @@ const Snapshot = gpackice.Snapshot;
 type Snapshot = InstanceType<typeof gpackice.Snapshot>;
 
 const PLAYER_SPEED = 0.4;
-
-
-function getIdx(x: number, y: number) {
-	if (x < 0 || y < 0 || x >= Snapshot.TILES_X || y >= Snapshot.TILES_Y)
-		return -1;
-
-	return y * Snapshot.TILES_X + x;
-}
+const TILE_MODULO = 5 * 1000;
 
 
 export const packice_game: GameInterface<Snapshot> = {
 	playerCount: 2,
 
 	createSnapshot(isServer: boolean) {
-		return new Snapshot(isServer);
+		const snapshot = new Snapshot(isServer);
+		return snapshot;
 	},
 
 
@@ -42,38 +36,79 @@ export const packice_game: GameInterface<Snapshot> = {
 		player.vy = data.readFloat32();
 	},
 
+	frame(snapshot: Snapshot, speed: number) {
+		// Run players
+		for (let i = 0; i < snapshot.players.length; i++) {
+			const player = snapshot.players[i];
+			if (!player.alive)
+				continue;
 
-	frame(snapshot: Snapshot, speed: number, isServer: boolean) {
-		for (let player of snapshot.players) {
-			player.x += player.vx * speed*PLAYER_SPEED;
-			player.y += player.vy * speed*PLAYER_SPEED;
+			player.x += player.vx * (speed*PLAYER_SPEED);
+			player.y += player.vy * (speed*PLAYER_SPEED);
 
-			const x = Math.floor((player.x -  90) / 100);
-			const y = Math.floor((player.y - 140) / 100);
+			let alive = false;
+			for (let idx of player.getTouchedTiles()) {
+				if (idx < 0)
+					continue;
 
-			const p = getIdx(x, y);
-			if (p >= 0) {
-				const v = snapshot.tiles[p];
-				if (v > 0) {
-					snapshot.tiles[p] = v - speed;
+				const v = snapshot.tiles[idx];
+				if (v === 0)
+					continue;
+
+				alive = true;
+				if ((v % TILE_MODULO) === 0) {
+					snapshot.tiles[idx] = v-1;
 					continue;
 				}
 			}
 
+			if (!alive) {
+				snapshot.killPlayer(i);
+			}
 		}
+
+
+		// Reduce
+		for (let i = 0; i < snapshot.tiles.length; i++) {
+			const tile = snapshot.tiles[i];
+			if (tile > 0 && (tile % TILE_MODULO) !== 0) {
+				snapshot.tiles[i] = Math.max(tile - speed, Math.floor(tile / TILE_MODULO) * TILE_MODULO);
+			}
+		}
+
+		snapshot.frame += speed;
 
 	},
 
+
+	getLeaderboard(snapshot: Snapshot) {
+		return snapshot.getLeaderboard();
+	},
+
+	killPlayer(snapshot: Snapshot, user: number) {
+		snapshot.killPlayer(user);
+	},
+
+
+
 	readNetworkDesc(snapshot: Snapshot, reader: DataReader) {
+		// Read players
 		for (let player of snapshot.players) {
 			player.x = reader.readFloat32();
 			player.y = reader.readFloat32();
 			player.vx = reader.readFloat32();
 			player.vy = reader.readFloat32();
 		}
+
+		// Read tiles
+		for (const tile of snapshot.onSquare()) {
+			snapshot.tiles[tile.idx] = tile.value;
+		}
+
 	},
 
 	writeNetworkDesc(snapshot: Snapshot, writer: DataWriter) {
+		// Send players
 		for (let player of snapshot.players) {
 			writer.writeFloat32(player.x);
 			writer.writeFloat32(player.y);
