@@ -24,7 +24,7 @@ export interface ClientInterface<Snapshot, Memory> {
 		playerIndex: number,
 		applyToScreen: () => void): void;
 
-	runFrame(
+	clientFrame(
 		snapshot: Snapshot,
 		memory: Memory,
 		playerIndex: number,

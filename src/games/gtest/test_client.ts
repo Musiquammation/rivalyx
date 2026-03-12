@@ -100,7 +100,7 @@ export const test_client: ClientInterface<Snapshot, Memory> = {
 		ctx.restore();
 	},
 
-	runFrame(
+	clientFrame(
 		snapshot: Snapshot, memory: Memory,
 		playerIndex: number, client: ClientGameEngine
 	) {

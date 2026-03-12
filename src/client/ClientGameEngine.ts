@@ -103,17 +103,14 @@ export class ClientGameEngine {
 
 	
 	runFrame(duration: number) {
-		if (duration <= 0)
-			return;
-
-		this.object.runFrame(this.snapshot, this.memory, this.playerIndex, this);
-
 		while (duration >= MAX_FRAME_DURATION) {
-			this.object.game.frame(this.snapshot, MAX_FRAME_DURATION, false);
+			this.object.game.frame(this.snapshot, MAX_FRAME_DURATION);
 			duration -= MAX_FRAME_DURATION;
 		}
 
-		this.object.game.frame(this.snapshot, duration, false);
+		this.object.game.frame(this.snapshot, duration);
+		this.object.clientFrame(this.snapshot, this.memory, this.playerIndex, this);
+
 	}
 
 
@@ -165,21 +162,20 @@ export class ClientGameEngine {
 	private simulateInputs(startDate: number, inputs: Input[]) {
 		if (inputs.length === 0) {
 			const date = getTimestamp();
-			this.runFrame(date - startDate);
+			this.object.game.frame(
+				this.snapshot,
+				date - startDate
+			);
 			
 		} else {
 			// Simulate until now
 			const lengthLimit = inputs.length - 1;
 
-			this.runFrame(inputs[0].date - startDate);
+			this.runFrame(Math.max(inputs[0].date - startDate, 0));
 
 			for (let i = 0; i < lengthLimit; i++) {
 				const input = inputs[i];
-
-				const date = input.date;
-				if (date < startDate) {
-					console.warn("Input previous startDate");
-				}
+				let date = Math.max(startDate, input.date);
 
 				this.object.game.handleInput(
 					this.snapshot,
@@ -187,7 +183,7 @@ export class ClientGameEngine {
 					input.user
 				);
 
-				this.runFrame(inputs[i+1].date - date);
+				this.runFrame(Math.max(inputs[i+1].date - date, 0));
 			}
 
 			const date = getTimestamp();
