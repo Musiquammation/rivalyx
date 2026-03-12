@@ -48,8 +48,6 @@ export const test_game: GameInterface<Snapshot> = {
 			player.vx = reader.readFloat32();
 			player.vy = reader.readFloat32();
 		}
-
-		console.log("shared:", snapshot.players[0].y);
 	},
 
 	writeNetworkDesc(snapshot: Snapshot, writer: DataWriter) {

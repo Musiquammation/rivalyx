@@ -8,14 +8,15 @@ import { gpackice } from "./packice_commons";
 const Snapshot = gpackice.Snapshot;
 type Snapshot = InstanceType<typeof gpackice.Snapshot>;
 
-const PLAYER_SPEED = 0.1;
+const PLAYER_SPEED = 0.4;
+const TILE_MODULO = 2000;
+
 
 export const packice_game: GameInterface<Snapshot> = {
 	playerCount: 2,
 
 	createSnapshot(isServer: boolean) {
-		const snapshot = new Snapshot();
-		snapshot.tiles.fill(255);
+		const snapshot = new Snapshot(isServer);
 		return snapshot;
 	},
 
@@ -36,13 +37,39 @@ export const packice_game: GameInterface<Snapshot> = {
 	},
 
 	frame(snapshot: Snapshot, speed: number) {
+		// Run players
 		for (let player of snapshot.players) {
 			player.x += player.vx * speed*PLAYER_SPEED;
 			player.y += player.vy * speed*PLAYER_SPEED;
+
+			for (let idx of player.getTouchedTiles()) {
+				if (idx < 0)
+					continue;
+
+				const v = snapshot.tiles[idx];
+				if (v > 0 && (v % TILE_MODULO) === 0) {
+					snapshot.tiles[idx] = v-1;
+					continue;
+				}
+			}
 		}
+
+
+		// Reduce
+		for (let i = 0; i < snapshot.tiles.length; i++) {
+			const tile = snapshot.tiles[i];
+			if (tile > 0 && (tile % TILE_MODULO) !== 0) {
+				snapshot.tiles[i] = Math.max(tile - speed, Math.floor(tile / TILE_MODULO) * TILE_MODULO);
+			}
+		}
+
+
 	},
 
+
+
 	readNetworkDesc(snapshot: Snapshot, reader: DataReader) {
+		// Read players
 		for (let player of snapshot.players) {
 			player.x = reader.readFloat32();
 			player.y = reader.readFloat32();
@@ -50,10 +77,15 @@ export const packice_game: GameInterface<Snapshot> = {
 			player.vy = reader.readFloat32();
 		}
 
-		console.log("shared:", snapshot.players[0].y);
+		// Read tiles
+		for (const tile of snapshot.onSquare()) {
+			snapshot.tiles[tile.idx] = tile.value;
+		}
+
 	},
 
 	writeNetworkDesc(snapshot: Snapshot, writer: DataWriter) {
+		// Send players
 		for (let player of snapshot.players) {
 			writer.writeFloat32(player.x);
 			writer.writeFloat32(player.y);

@@ -80,7 +80,7 @@ export const packice_client: ClientInterface<Snapshot, Memory> = {
 			for (let x = 0; x < TILES_X; x++) {
 				const line = snapshot.tiles[tile];
 				ctx.save();
-				ctx.globalAlpha = line/255;
+				ctx.globalAlpha = line / Snapshot.LIFETIME;
 				ctx.drawImage(floorImg, 100*x + 90, 100*y + 140, 100, 100);
 				ctx.restore();
 				tile++;
@@ -95,8 +95,8 @@ export const packice_client: ClientInterface<Snapshot, Memory> = {
 			const player = snapshot.players[i];
 			const px = player.x;
 			const py = player.y;
-			const size = 100;
-			const half = size / 2;
+			const half = Snapshot.PLAYER_RADIUS;
+			const size = half*2;
 
 			ctx.save();
 			ctx.translate(px, py);
