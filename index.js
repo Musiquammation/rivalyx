@@ -1,5 +1,6 @@
 (function() {
   "use strict";
+  var _a;
   class DataReader {
     constructor(buffer) {
       this.offset = 0;
@@ -187,6 +188,20 @@
       new Uint8Array(this.buffer, this.offset, length).set(new Uint8Array(writer.toArrayBuffer()));
       this.offset += length;
     }
+    addDataView(view) {
+      const length = view.byteLength;
+      if (length === 0) return;
+      this.checkSize(length);
+      new Uint8Array(this.buffer, this.offset, length).set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+      this.offset += length;
+    }
+    addArrayBuffer(buffer) {
+      const length = buffer.byteLength;
+      if (length === 0) return;
+      this.checkSize(length);
+      new Uint8Array(this.buffer, this.offset, length).set(new Uint8Array(buffer));
+      this.offset += length;
+    }
     addUint8Array(array) {
       const length = array.length;
       if (length === 0) return;
@@ -220,35 +235,9 @@
     SERVER_IDS2[SERVER_IDS2["FINISH"] = 5] = "FINISH";
     return SERVER_IDS2;
   })(SERVER_IDS || {});
-  class ImageLoader {
-    constructor() {
-      this.images = /* @__PURE__ */ new Map();
-    }
-    async loadImages(images) {
-      const promises = Object.entries(images).map(([name, url]) => {
-        return new Promise((resolve, reject) => {
-          const img = new Image();
-          img.src = url;
-          img.onload = () => {
-            this.images.set(name, img);
-            resolve();
-          };
-          img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
-        });
-      });
-      await Promise.all(promises);
-    }
-    getImage(key) {
-      const img = this.images.get(key);
-      if (img)
-        return img;
-      throw new Error("Failed to get image");
-    }
+  function getTimestamp() {
+    return Date.now() >>> 0;
   }
-  const SHARED_DESCRIPTIONS = {
-    packice: { playerCount: 2 },
-    paint: { playerCount: 2 }
-  };
   var JoystickPlacement = /* @__PURE__ */ ((JoystickPlacement2) => {
     JoystickPlacement2[JoystickPlacement2["CENTERED"] = 0] = "CENTERED";
     JoystickPlacement2[JoystickPlacement2["SCREEN_RATIO"] = 1] = "SCREEN_RATIO";
@@ -281,15 +270,41 @@
   };
   _Joystick.FACTOR = 0.05;
   let Joystick = _Joystick;
+  const MAX_FRAME_DURATION = 10;
   class ClientGameEngine {
-    constructor(imageLoader) {
+    constructor(imageLoader, object) {
       this.joysticks = /* @__PURE__ */ new Set();
       this.buttons = /* @__PURE__ */ new Set();
       this.playerIndex = -1;
+      this.lastSendDate = -Infinity;
       this.canvas = null;
+      this.inputs = [];
       this.imageLoader = imageLoader;
+      this.object = object;
+      this.snapshot = object.game.createSnapshot(false);
     }
-    drawGame(ctx) {
+    start() {
+      this.memory = this.object.createMemory(
+        this.snapshot,
+        this,
+        this.playerIndex
+      );
+    }
+    getGameSize() {
+      return this.object.gameSize;
+    }
+    getTimer() {
+      return this.object.getTimer(this.snapshot);
+    }
+    addInput(data) {
+      this.inputs.push({
+        date: getTimestamp(),
+        user: this.playerIndex,
+        content: data
+      });
+      this.object.game.handleInput(this.snapshot, new DataReader(data), this.playerIndex);
+    }
+    draw(ctx) {
       const applyToScreen = () => {
         const gameSize = this.getGameSize();
         const screenWidth = this.canvas.width;
@@ -302,9 +317,121 @@
         ctx.translate(offsetX, offsetY);
         ctx.scale(scale, scale);
       };
-      this.draw(ctx, this.canvas.width, this.canvas.height, applyToScreen);
+      this.object.draw(
+        this.snapshot,
+        this.memory,
+        ctx,
+        this.canvas.width,
+        this.canvas.height,
+        this.imageLoader,
+        this.playerIndex,
+        applyToScreen
+      );
     }
-    handleSubTouchEvent(kind, event, screenWidth, screenHeight, canvasWidth, canvasHeight) {
+    getFirstInput(date) {
+      let l = 0;
+      let r = this.inputs.length;
+      while (l < r) {
+        const mid = l + r >>> 1;
+        if (this.inputs[mid].date < date)
+          l = mid + 1;
+        else
+          r = mid;
+      }
+      return l;
+    }
+    runFrame(duration) {
+      while (duration >= MAX_FRAME_DURATION) {
+        this.object.game.frame(this.snapshot, MAX_FRAME_DURATION);
+        duration -= MAX_FRAME_DURATION;
+      }
+      this.object.game.frame(this.snapshot, duration);
+      this.object.clientFrame(this.snapshot, this.memory, this.playerIndex, this);
+    }
+    static readInputs(reader) {
+      const length = reader.readUint32();
+      const newInputs = new Array(length);
+      for (let i = 0; i < length; i++) {
+        const date = reader.readUint32();
+        const byteLength = reader.readUint16();
+        const user = reader.readUint16();
+        const input = {
+          date,
+          user,
+          content: reader.readUint8Array(byteLength).buffer
+        };
+        newInputs[i] = input;
+      }
+      return newInputs;
+    }
+    mergeInputs(newInputs) {
+      const merged = [];
+      let i = 0;
+      let j = 0;
+      while (i < this.inputs.length && j < newInputs.length) {
+        if (this.inputs[i].date <= newInputs[j].date) {
+          merged.push(this.inputs[i++]);
+        } else {
+          merged.push(newInputs[j++]);
+        }
+      }
+      while (i < this.inputs.length)
+        merged.push(this.inputs[i++]);
+      while (j < newInputs.length)
+        merged.push(newInputs[j++]);
+      return merged;
+    }
+    simulateInputs(startDate, inputs) {
+      if (inputs.length === 0) {
+        const date = getTimestamp();
+        this.object.game.frame(
+          this.snapshot,
+          date - startDate
+        );
+      } else {
+        const lengthLimit = inputs.length - 1;
+        this.runFrame(Math.max(inputs[0].date - startDate, 0));
+        for (let i = 0; i < lengthLimit; i++) {
+          const input = inputs[i];
+          let date2 = Math.max(startDate, input.date);
+          this.object.game.handleInput(
+            this.snapshot,
+            new DataReader(input.content),
+            input.user
+          );
+          this.runFrame(Math.max(inputs[i + 1].date - date2, 0));
+        }
+        const date = getTimestamp();
+        this.object.game.handleInput(
+          this.snapshot,
+          new DataReader(inputs[lengthLimit].content),
+          this.playerIndex
+        );
+        this.runFrame(date - inputs[lengthLimit].date);
+      }
+    }
+    handleNetwork(reader) {
+      if (reader) {
+        reader.readUint32();
+        this.object.game.readNetworkDesc(this.snapshot, reader);
+        const startDate = reader.readUint32();
+        const mergedInputs = this.mergeInputs(
+          ClientGameEngine.readInputs(reader)
+        );
+        this.simulateInputs(startDate, mergedInputs);
+      }
+      const writer = new DataWriter();
+      writer.writeUint8(SERVER_IDS.GAME_DATA);
+      writer.writeUint32(getTimestamp());
+      for (let input of this.inputs) {
+        writer.writeUint32(input.date);
+        writer.addArrayBuffer(input.content);
+      }
+      writer.writeUint32(0);
+      writer.writeUint8(SERVER_IDS.FINISH);
+      this.inputs.length = 0;
+      this.lastSendDate = getTimestamp();
+      return writer;
     }
     setCanvas(canvas) {
       this.canvas = canvas;
@@ -315,7 +442,15 @@
       const screenHeight = window.innerHeight;
       const canvasWidth = this.canvas.width;
       const canvasHeight = this.canvas.height;
-      this.handleSubTouchEvent(kind, event, screenWidth, screenHeight, canvasWidth, canvasHeight);
+      this.object.handleSubTouchEvent(
+        this.snapshot,
+        kind,
+        event,
+        screenWidth,
+        screenHeight,
+        canvasWidth,
+        canvasHeight
+      );
       let shouldPreventDefault = true;
       for (let i = 0; i < event.changedTouches.length; i++) {
         const touch = event.changedTouches[i];
@@ -469,43 +604,133 @@
       }
     }
   }
-  let Player$1 = class Player {
-    constructor(x, y, dir) {
-      this.vx = 0;
-      this.vy = 0;
+  class ImageLoader {
+    constructor() {
+      this.images = /* @__PURE__ */ new Map();
+    }
+    async loadImages(images) {
+      const promises = Object.entries(images).map(([name, url]) => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.src = url;
+          img.onload = () => {
+            this.images.set(name, img);
+            resolve();
+          };
+          img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+        });
+      });
+      await Promise.all(promises);
+    }
+    getImage(key) {
+      const img = this.images.get(key);
+      if (img)
+        return img;
+      throw new Error("Failed to get image");
+    }
+  }
+  let Player$2 = class Player {
+    constructor(x, y) {
+      this.alive = true;
       this.x = x;
       this.y = y;
-      this.dir = dir;
     }
   };
-  const _GClientPackice = class _GClientPackice extends ClientGameEngine {
-    constructor(imageLoader) {
-      super(imageLoader);
-      this.tiles = new Uint8Array(_GClientPackice.TILES_Y * _GClientPackice.TILES_X);
-      this.players = [
-        new Player$1(540, 290, Math.PI / 2),
-        new Player$1(540, 2090, Math.PI * 3 / 2)
-      ];
+  let ServData$1 = class ServData {
+    constructor() {
+      this.killedPlayers = [];
     }
-    async start() {
-      super.appendJoystick(new Joystick(
+  };
+  let Snapshot$6 = class Snapshot {
+    constructor(isServer) {
+      this.players = [
+        new Player$2(540, 290),
+        new Player$2(540, 2090)
+      ];
+      this.frame = 0;
+      this.servData = isServer ? new ServData$1() : null;
+    }
+    getLeaderboard() {
+      const len = this.players.length;
+      if (!this.servData)
+        return null;
+      const killedPlayers = this.servData.killedPlayers;
+      if (killedPlayers.length < this.players.length) {
+        return null;
+      }
+      const leaderboard = new Array(len);
+      for (let i = 0; i < len; i++) {
+        leaderboard[killedPlayers[i]] = len - i - 1;
+      }
+      return leaderboard;
+    }
+    killPlayer(idx) {
+      if (this.servData && this.players[idx].alive) {
+        this.servData.killedPlayers.push(idx);
+        this.players[idx].alive = false;
+      }
+    }
+  };
+  const gcowboy = {
+    Snapshot: Snapshot$6
+  };
+  const Snapshot$5 = gcowboy.Snapshot;
+  const cowboy_game = {
+    playerCount: 2,
+    createSnapshot(isServer) {
+      const snapshot = new Snapshot$5(isServer);
+      return snapshot;
+    },
+    extractInput(reader) {
+      const writer = new DataWriter();
+      return writer.toArrayBuffer();
+    },
+    handleInput(snapshot, data, user) {
+      snapshot.players[user];
+    },
+    frame(snapshot, speed) {
+      snapshot.frame += speed;
+    },
+    getLeaderboard(snapshot) {
+      return snapshot.getLeaderboard();
+    },
+    killPlayer(snapshot, user) {
+      snapshot.killPlayer(user);
+    },
+    readNetworkDesc(snapshot, reader) {
+    },
+    writeNetworkDesc(snapshot, writer) {
+    }
+  };
+  const cowboy_client = {
+    game: cowboy_game,
+    name: "Pingouins",
+    images: {
+      playerRed: "assets/gpackice/player-red.svg",
+      playerBlue: "assets/gpackice/player-blue.svg",
+      floor: "assets/gpackice/floor.svg"
+    },
+    gameSize: { width: 1080, height: 2400 },
+    createMemory(snapshot, client, playerIndex) {
+      client.appendJoystick(new Joystick(
         0.9,
         0.9,
         JoystickPlacement.SCREEN_RATIO,
         JoystickPlacement.SCREEN_RATIO,
-        this.playerIndex === 0 ? JOYSTICK_COLORS.red : JOYSTICK_COLORS.blue,
+        playerIndex === 0 ? JOYSTICK_COLORS.red : JOYSTICK_COLORS.blue,
         "move"
       ));
-      this.tiles.fill(255);
-    }
-    getTimer() {
+      return {
+        playerDirections: [Math.PI * 1 / 2, Math.PI * 3 / 2],
+        lastSentX: Infinity,
+        lastSentY: Infinity
+      };
+    },
+    getTimer(snapshot) {
       return -1;
-    }
-    getGameSize() {
-      return { width: 1080, height: 2400 };
-    }
-    draw(ctx, screenWidth, screenHeight, applyToScreen) {
-      if (this.playerIndex === 0) {
+    },
+    draw(snapshot, memory, ctx, screenWidth, screenHeight, imageLoader, playerIndex, applyToScreen) {
+      if (playerIndex === 0) {
         ctx.fillStyle = "rgb(98, 25, 25)";
       } else {
         ctx.fillStyle = "rgb(25, 39, 98)";
@@ -513,13 +738,280 @@
       ctx.fillRect(0, 0, screenWidth, screenHeight);
       ctx.save();
       applyToScreen();
-      const floorImg = this.imageLoader.getImage("floor");
+      const imagesNames = ["playerRed", "playerBlue"];
+      for (let i = 0; i < 2; i++) {
+        const player = snapshot.players[i];
+        const px = player.x;
+        const py = player.y;
+        const half = 40;
+        const size = half * 2;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(memory.playerDirections[i]);
+        ctx.drawImage(
+          imageLoader.getImage(imagesNames[i]),
+          -half,
+          -half,
+          size,
+          size
+        );
+        ctx.restore();
+      }
+      ctx.restore();
+    },
+    clientFrame(snapshot, memory, playerIndex, client) {
+      for (let i = 0; i < snapshot.players.length; i++) {
+        if (i == playerIndex)
+          continue;
+      }
+      let dir = client.getJoyStickDirection("move");
+      if (!dir) {
+        dir = { x: 0, y: 0 };
+      }
+      if (dir.x != memory.lastSentX || dir.y != memory.lastSentY) {
+        memory.lastSentX = dir.x;
+        memory.lastSentY = dir.y;
+        if (dir.x != 0 || dir.y != 0) {
+          memory.playerDirections[playerIndex] = Math.atan2(dir.y, dir.x);
+        }
+        const writer = new DataWriter();
+        writer.writeFloat32(dir.x);
+        writer.writeFloat32(dir.y);
+        client.addInput(writer.toArrayBuffer());
+      }
+    },
+    handleSubTouchEvent(snapshot, kind, event, screenWidth, screenHeight, canvasWidth, canvasHeight) {
+    }
+  };
+  let Player$1 = class Player {
+    constructor(x, y) {
+      this.vx = 0;
+      this.vy = 0;
+      this.alive = true;
+      this.x = x;
+      this.y = y;
+    }
+    *getTouchedTiles() {
+      const s = 100;
+      const x = this.x % s;
+      const y = this.y % s;
+      const cx = Math.floor((this.x - 90) / s);
+      const cy = Math.floor((this.y - 140) / s);
+      const r = Snapshot$4.PLAYER_RADIUS;
+      const sqR = r * (0.5 * Math.sqrt(2));
+      yield Snapshot$4.getIdx(cx, cy);
+      if (x + r >= s) {
+        yield Snapshot$4.getIdx(cx + 1, cy);
+      }
+      if (y - r < 0) {
+        yield Snapshot$4.getIdx(cx, cy - 1);
+      }
+      if (x - r < 0) {
+        yield Snapshot$4.getIdx(cx - 1, cy);
+      }
+      if (x + r > 0) {
+        yield Snapshot$4.getIdx(cx, cy + 1);
+      }
+      if (y - sqR < 0 && x + sqR >= s)
+        yield Snapshot$4.getIdx(cx + 1, cy - 1);
+      if (y - sqR < 0 && x - sqR < 0)
+        yield Snapshot$4.getIdx(cx - 1, cy - 1);
+      if (y + sqR >= s && x - sqR < 0)
+        yield Snapshot$4.getIdx(cx - 1, cy + 1);
+      if (y + sqR >= s && x + sqR >= s)
+        yield Snapshot$4.getIdx(cx + 1, cy + 1);
+    }
+  };
+  class ServData {
+    constructor() {
+      this.killedPlayers = [];
+    }
+  }
+  let Snapshot$4 = (_a = class {
+    constructor(isServer) {
+      this.players = [
+        new Player$1(540, 290),
+        new Player$1(540, 2090)
+      ];
+      this.tiles = new Int16Array(_a.TILES_Y * _a.TILES_X);
+      this.frame = 0;
+      this.servData = isServer ? new ServData() : null;
+      this.tiles.fill(_a.LIFETIME);
+    }
+    *onSquare() {
+      const seen = /* @__PURE__ */ new Set();
+      for (const player of this.players) {
+        const px = player.x;
+        const py = player.y;
+        for (let dy = -_a.SEND_RANGE; dy <= _a.SEND_RANGE; dy++) {
+          for (let dx = -_a.SEND_RANGE; dx <= _a.SEND_RANGE; dx++) {
+            const idx = _a.getIdx(px + dx, py + dy);
+            if (idx === -1) continue;
+            if (seen.has(idx)) continue;
+            seen.add(idx);
+            yield { idx, value: this.tiles[idx] };
+          }
+        }
+      }
+    }
+    getLeaderboard() {
+      const len = this.players.length;
+      if (!this.servData)
+        return null;
+      const killedPlayers = this.servData.killedPlayers;
+      if (killedPlayers.length < this.players.length) {
+        return null;
+      }
+      const leaderboard = new Array(len);
+      for (let i = 0; i < len; i++) {
+        leaderboard[killedPlayers[i]] = len - i - 1;
+      }
+      return leaderboard;
+    }
+    killPlayer(idx) {
+      if (this.servData && this.players[idx].alive) {
+        console.log("Kill " + idx);
+        this.servData.killedPlayers.push(idx);
+        this.players[idx].alive = false;
+      }
+    }
+    static getIdx(x, y) {
+      if (x < 0 || y < 0 || x >= _a.TILES_X || y >= _a.TILES_Y)
+        return -1;
+      return y * _a.TILES_X + x;
+    }
+  }, _a.TILES_X = 9, _a.TILES_Y = 21, _a.LIFETIME = 12 * 1e3, _a.SEND_RANGE = 3, _a.PLAYER_RADIUS = 40, _a);
+  const gpackice = {
+    Snapshot: Snapshot$4
+  };
+  const Snapshot$3 = gpackice.Snapshot;
+  const PLAYER_SPEED$1 = 0.4;
+  const TILE_MODULO = 5 * 1e3;
+  const packice_game = {
+    playerCount: 2,
+    createSnapshot(isServer) {
+      const snapshot = new Snapshot$3(isServer);
+      return snapshot;
+    },
+    extractInput(reader) {
+      const writer = new DataWriter();
+      const x = reader.readFloat32();
+      const y = reader.readFloat32();
+      writer.writeFloat32(x);
+      writer.writeFloat32(y);
+      return writer.toArrayBuffer();
+    },
+    handleInput(snapshot, data, user) {
+      const player = snapshot.players[user];
+      player.vx = data.readFloat32();
+      player.vy = data.readFloat32();
+    },
+    frame(snapshot, speed) {
+      for (let i = 0; i < snapshot.players.length; i++) {
+        const player = snapshot.players[i];
+        if (!player.alive)
+          continue;
+        player.x += player.vx * (speed * PLAYER_SPEED$1);
+        player.y += player.vy * (speed * PLAYER_SPEED$1);
+        let alive = false;
+        for (let idx of player.getTouchedTiles()) {
+          if (idx < 0)
+            continue;
+          const v = snapshot.tiles[idx];
+          if (v === 0)
+            continue;
+          alive = true;
+          if (v % TILE_MODULO === 0) {
+            snapshot.tiles[idx] = v - 1;
+            continue;
+          }
+        }
+        if (!alive) {
+          snapshot.killPlayer(i);
+        }
+      }
+      for (let i = 0; i < snapshot.tiles.length; i++) {
+        const tile = snapshot.tiles[i];
+        if (tile > 0 && tile % TILE_MODULO !== 0) {
+          snapshot.tiles[i] = Math.max(tile - speed, Math.floor(tile / TILE_MODULO) * TILE_MODULO);
+        }
+      }
+      snapshot.frame += speed;
+    },
+    getLeaderboard(snapshot) {
+      return snapshot.getLeaderboard();
+    },
+    killPlayer(snapshot, user) {
+      snapshot.killPlayer(user);
+    },
+    readNetworkDesc(snapshot, reader) {
+      for (let player of snapshot.players) {
+        player.x = reader.readFloat32();
+        player.y = reader.readFloat32();
+        player.vx = reader.readFloat32();
+        player.vy = reader.readFloat32();
+        player.alive = reader.readInt8() != 0;
+      }
+      for (const tile of snapshot.onSquare()) {
+        snapshot.tiles[tile.idx] = tile.value;
+      }
+    },
+    writeNetworkDesc(snapshot, writer) {
+      for (let player of snapshot.players) {
+        writer.writeFloat32(player.x);
+        writer.writeFloat32(player.y);
+        writer.writeFloat32(player.vx);
+        writer.writeFloat32(player.vy);
+        writer.writeInt8(player.alive ? 1 : 0);
+      }
+    }
+  };
+  const Snapshot$2 = gpackice.Snapshot;
+  const TILES_X = Snapshot$2.TILES_X;
+  const TILES_Y = Snapshot$2.TILES_Y;
+  const packice_client = {
+    game: packice_game,
+    name: "Pingouins",
+    images: {
+      playerRed: "assets/gpackice/player-red.svg",
+      playerBlue: "assets/gpackice/player-blue.svg",
+      floor: "assets/gpackice/floor.svg"
+    },
+    gameSize: { width: 1080, height: 2400 },
+    createMemory(snapshot, client, playerIndex) {
+      client.appendJoystick(new Joystick(
+        0.9,
+        0.9,
+        JoystickPlacement.SCREEN_RATIO,
+        JoystickPlacement.SCREEN_RATIO,
+        playerIndex === 0 ? JOYSTICK_COLORS.red : JOYSTICK_COLORS.blue,
+        "move"
+      ));
+      return {
+        playerDirections: [Math.PI * 1 / 2, Math.PI * 3 / 2],
+        lastSentX: Infinity,
+        lastSentY: Infinity
+      };
+    },
+    getTimer(snapshot) {
+      return -1;
+    },
+    draw(snapshot, memory, ctx, screenWidth, screenHeight, imageLoader, playerIndex, applyToScreen) {
+      if (playerIndex === 0) {
+        ctx.fillStyle = "rgb(98, 25, 25)";
+      } else {
+        ctx.fillStyle = "rgb(25, 39, 98)";
+      }
+      ctx.fillRect(0, 0, screenWidth, screenHeight);
+      ctx.save();
+      applyToScreen();
+      const floorImg = imageLoader.getImage("floor");
       let tile = 0;
-      for (let y = 0; y < _GClientPackice.TILES_Y; y++) {
-        for (let x = 0; x < _GClientPackice.TILES_X; x++) {
-          const line = this.tiles[tile];
+      for (let y = 0; y < TILES_Y; y++) {
+        for (let x = 0; x < TILES_X; x++) {
+          const line = snapshot.tiles[tile];
           ctx.save();
-          ctx.globalAlpha = line / 255;
+          ctx.globalAlpha = line / Snapshot$2.LIFETIME;
           ctx.drawImage(floorImg, 100 * x + 90, 100 * y + 140, 100, 100);
           ctx.restore();
           tile++;
@@ -527,15 +1019,172 @@
       }
       const imagesNames = ["playerRed", "playerBlue"];
       for (let i = 0; i < 2; i++) {
-        const player = this.players[i];
+        const player = snapshot.players[i];
+        const px = player.x;
+        const py = player.y;
+        const half = Snapshot$2.PLAYER_RADIUS;
+        const size = half * 2;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(memory.playerDirections[i]);
+        ctx.drawImage(
+          imageLoader.getImage(imagesNames[i]),
+          -half,
+          -half,
+          size,
+          size
+        );
+        ctx.restore();
+      }
+      ctx.restore();
+    },
+    clientFrame(snapshot, memory, playerIndex, client) {
+      for (let i = 0; i < snapshot.players.length; i++) {
+        if (i == playerIndex)
+          continue;
+        const vx = snapshot.players[i].vx;
+        const vy = snapshot.players[i].vy;
+        if (vx != 0 || vy != 0) {
+          memory.playerDirections[i] = Math.atan2(vy, vx);
+        }
+      }
+      let dir = client.getJoyStickDirection("move");
+      if (!dir) {
+        dir = { x: 0, y: 0 };
+      }
+      if (dir.x != memory.lastSentX || dir.y != memory.lastSentY) {
+        memory.lastSentX = dir.x;
+        memory.lastSentY = dir.y;
+        if (dir.x != 0 || dir.y != 0) {
+          memory.playerDirections[playerIndex] = Math.atan2(dir.y, dir.x);
+        }
+        const writer = new DataWriter();
+        writer.writeFloat32(dir.x);
+        writer.writeFloat32(dir.y);
+        client.addInput(writer.toArrayBuffer());
+      }
+    },
+    handleSubTouchEvent(snapshot, kind, event, screenWidth, screenHeight, canvasWidth, canvasHeight) {
+    }
+  };
+  class Player {
+    constructor(x, y) {
+      this.vx = 0;
+      this.vy = 0;
+      this.eliminationFrame = -1;
+      this.x = x;
+      this.y = y;
+    }
+  }
+  let Snapshot$1 = class Snapshot {
+    constructor() {
+      this.players = [
+        new Player(540, 290),
+        new Player(540, 2090)
+      ];
+    }
+  };
+  const gtest = {
+    Snapshot: Snapshot$1
+  };
+  const Snapshot = gtest.Snapshot;
+  const PLAYER_SPEED = 0.6;
+  const test_game = {
+    playerCount: 2,
+    createSnapshot(isServer) {
+      const snapshot = new Snapshot();
+      return snapshot;
+    },
+    extractInput(reader) {
+      const writer = new DataWriter();
+      const x = reader.readFloat32();
+      const y = reader.readFloat32();
+      writer.writeFloat32(x);
+      writer.writeFloat32(y);
+      return writer.toArrayBuffer();
+    },
+    handleInput(snapshot, data, user) {
+      const player = snapshot.players[user];
+      player.vx = data.readFloat32();
+      player.vy = data.readFloat32();
+    },
+    frame(snapshot, speed) {
+      for (let player of snapshot.players) {
+        player.x += player.vx * speed * PLAYER_SPEED;
+        player.y += player.vy * speed * PLAYER_SPEED;
+      }
+    },
+    getLeaderboard(snapshot) {
+      return null;
+    },
+    killPlayer(snapshot, user) {
+    },
+    readNetworkDesc(snapshot, reader) {
+      for (let player of snapshot.players) {
+        player.x = reader.readFloat32();
+        player.y = reader.readFloat32();
+        player.vx = reader.readFloat32();
+        player.vy = reader.readFloat32();
+      }
+    },
+    writeNetworkDesc(snapshot, writer) {
+      for (let player of snapshot.players) {
+        writer.writeFloat32(player.x);
+        writer.writeFloat32(player.y);
+        writer.writeFloat32(player.vx);
+        writer.writeFloat32(player.vy);
+      }
+    }
+  };
+  window.dirX = 0;
+  window.dirY = 0;
+  const test_client = {
+    game: test_game,
+    name: "Test",
+    images: {
+      playerRed: "assets/gpackice/player-red.svg",
+      playerBlue: "assets/gpackice/player-blue.svg",
+      floor: "assets/gpackice/floor.svg"
+    },
+    gameSize: { width: 1080, height: 2400 },
+    createMemory(snapshot, client, playerIndex) {
+      client.appendJoystick(new Joystick(
+        0.9,
+        0.9,
+        JoystickPlacement.SCREEN_RATIO,
+        JoystickPlacement.SCREEN_RATIO,
+        playerIndex === 0 ? JOYSTICK_COLORS.red : JOYSTICK_COLORS.blue,
+        "move"
+      ));
+      return {
+        playerDirections: [Math.PI * 1 / 2, Math.PI * 3 / 2],
+        lastSentX: Infinity,
+        lastSentY: Infinity
+      };
+    },
+    getTimer(snapshot) {
+      return -1;
+    },
+    draw(snapshot, memory, ctx, screenWidth, screenHeight, imageLoader, playerIndex, applyToScreen) {
+      if (playerIndex === 0) {
+        ctx.fillStyle = "rgb(98, 25, 25)";
+      } else {
+        ctx.fillStyle = "rgb(25, 39, 98)";
+      }
+      ctx.fillRect(0, 0, screenWidth, screenHeight);
+      ctx.save();
+      applyToScreen();
+      const imagesNames = ["playerRed", "playerBlue"];
+      for (let i = 0; i < snapshot.players.length; i++) {
+        const player = snapshot.players[i];
         const px = player.x;
         const py = player.y;
         const size = 100;
         ctx.save();
         ctx.translate(px, py);
-        ctx.rotate(player.dir);
+        ctx.rotate(memory.playerDirections[i]);
         ctx.drawImage(
-          this.imageLoader.getImage(imagesNames[i]),
+          imageLoader.getImage(imagesNames[i]),
           -50,
           -50,
           size,
@@ -544,210 +1193,40 @@
         ctx.restore();
       }
       ctx.restore();
-    }
-    clientNetwork(reader) {
-      if (reader) {
-        for (let player of this.players) {
-          player.x = reader.readFloat32();
-          player.y = reader.readFloat32();
-          player.vx = reader.readFloat32();
-          player.vy = reader.readFloat32();
-          if (player.vx != 0 || player.vy != 0) {
-            player.dir = Math.atan2(player.vy, player.vx);
-          }
-        }
-        this.tiles = reader.readUint8Array(_GClientPackice.TILES_Y * _GClientPackice.TILES_X);
-      }
-      const writer = new DataWriter();
-      writer.writeInt8(SERVER_IDS.GAME_DATA);
-      const joystick = super.getJoyStickDirection("move");
-      if (joystick) {
-        writer.writeInt8(1);
-        writer.writeFloat32(joystick.x);
-        writer.writeFloat32(joystick.y);
-      } else {
-        writer.writeInt8(0);
-      }
-      writer.writeInt8(SERVER_IDS.FINISH);
-      return writer;
-    }
-  };
-  _GClientPackice.IMAGES = {
-    playerRed: "assets/gpackice/player-red.svg",
-    playerBlue: "assets/gpackice/player-blue.svg",
-    floor: "assets/gpackice/floor.svg"
-  };
-  _GClientPackice.TILES_X = 9;
-  _GClientPackice.TILES_Y = 21;
-  let GClientPackice = _GClientPackice;
-  const _Player = class _Player {
-    constructor(x, y, dir) {
-      this.vx = 0;
-      this.vy = 0;
-      this.x = x;
-      this.y = y;
-      this.dir = dir;
-    }
-  };
-  _Player.WIDTH = 40;
-  _Player.HEIGHT = 200;
-  let Player = _Player;
-  const _GClientPaint = class _GClientPaint extends ClientGameEngine {
-    constructor(imageLoader) {
-      super(imageLoader);
-      this.players = [
-        new Player(540, 290, Math.PI / 2),
-        new Player(540, 2090, Math.PI * 3 / 2)
-      ];
-      this.boostType = -1;
-      this.boostX = 0;
-      this.boostY = 0;
-      this.offscreen = new OffscreenCanvas(_GClientPaint.WIDTH, _GClientPaint.HEIGHT);
-      this.timer = -1;
-    }
-    async start() {
-      super.appendJoystick(new Joystick(
-        0.9,
-        0.9,
-        JoystickPlacement.SCREEN_RATIO,
-        JoystickPlacement.SCREEN_RATIO,
-        this.playerIndex === 0 ? JOYSTICK_COLORS.red : JOYSTICK_COLORS.blue,
-        "move"
-      ));
-      const subctx = this.offscreen.getContext("2d");
-      subctx.fillStyle = "#F3E9DC";
-      subctx.fillRect(0, 0, 1080, 2400);
-    }
-    getTimer() {
-      return this.timer;
-    }
-    getGameSize() {
-      return { width: _GClientPaint.WIDTH, height: _GClientPaint.HEIGHT };
-    }
-    draw(ctx, screenWidth, screenHeight, applyToScreen) {
-      ctx.save();
-      applyToScreen();
-      ctx.drawImage(this.offscreen, 0, 0);
-      if (this.boostType >= 0) {
-        ctx.save();
-        ctx.translate(this.boostX, this.boostY);
-        ctx.drawImage(
-          this.imageLoader.getImage(_GClientPaint.BOOST_LIST[this.boostType]),
-          -_GClientPaint.BOOST_RADIUS / 2,
-          -_GClientPaint.BOOST_RADIUS / 2,
-          _GClientPaint.BOOST_RADIUS,
-          _GClientPaint.BOOST_RADIUS
-        );
-        ctx.restore();
-      }
-      const imagesNames = ["playerRed", "playerBlue"];
-      for (let i = 0; i < 2; i++) {
-        const player = this.players[i];
-        const px = player.x;
-        const py = player.y;
-        const width = Player.WIDTH;
-        const height = Player.HEIGHT;
-        ctx.save();
-        ctx.translate(px, py);
-        ctx.rotate(player.dir);
-        ctx.drawImage(
-          this.imageLoader.getImage(imagesNames[i]),
-          -width / 2,
-          -height / 2,
-          width,
-          height
-        );
-        ctx.restore();
-      }
-      ctx.restore();
-    }
-    clientNetwork(reader) {
-      if (reader) {
-        this.timer = reader.readInt32() / 60;
-        const boostType = reader.readInt8();
-        this.boostType = boostType;
-        if (boostType >= 0) {
-          this.boostX = reader.readFloat32();
-          this.boostY = reader.readFloat32();
-        }
-        console.log(boostType, this.boostX, this.boostY);
-        for (let i = 0; i < this.players.length; i++) {
-          const player = this.players[i];
-          const next_x = reader.readFloat32();
-          const next_y = reader.readFloat32();
-          const next_vx = reader.readFloat32();
-          const next_vy = reader.readFloat32();
-          let next_dir;
-          if (next_vx != 0 || next_vy != 0) {
-            next_dir = Math.atan2(next_vy, next_vx);
-          } else {
-            next_dir = player.dir;
-          }
-          const subctx = this.offscreen.getContext("2d");
-          subctx.save();
-          const steps = 10;
-          const colors = ["#FF6B6B", "#4ECDC4"];
-          subctx.fillStyle = colors[i];
-          for (let step = 0; step <= steps; step++) {
-            const t = step / steps;
-            const x = player.x + (next_x - player.x) * t;
-            const y = player.y + (next_y - player.y) * t;
-            const dir = player.dir + (next_dir - player.dir) * t;
-            subctx.save();
-            subctx.translate(x, y);
-            subctx.rotate(dir);
-            subctx.fillRect(-Player.WIDTH / 2, -Player.HEIGHT / 2, Player.WIDTH, Player.HEIGHT);
-            subctx.restore();
-          }
-          subctx.restore();
-          player.x = next_x;
-          player.y = next_y;
-          player.dir = next_dir;
-          player.vx = next_vx;
-          player.vy = next_vy;
-        }
-      }
-      const writer = new DataWriter();
-      writer.writeInt8(SERVER_IDS.GAME_DATA);
-      const joystick = super.getJoyStickDirection("move");
-      if (joystick) {
-        writer.writeInt8(1);
-        writer.writeFloat32(joystick.x);
-        writer.writeFloat32(joystick.y);
-      } else {
-        writer.writeInt8(0);
-      }
-      writer.writeInt8(SERVER_IDS.FINISH);
-      return writer;
-    }
-  };
-  _GClientPaint.IMAGES = {
-    playerRed: "assets/gpaint/player-red.svg",
-    playerBlue: "assets/gpaint/player-blue.svg",
-    boost_speed: "assets/gpaint/boost-speed.svg"
-  };
-  _GClientPaint.BOOST_LIST = ["boost_speed", "boost_splash", "boost_big"];
-  _GClientPaint.BOOST_RADIUS = 128;
-  _GClientPaint.WIDTH = 1080;
-  _GClientPaint.HEIGHT = 2400;
-  let GClientPaint = _GClientPaint;
-  const CLIENT_DESCRIPTIONS = [
-    {
-      create: (imageLoader) => {
-        return new GClientPackice(imageLoader);
-      },
-      desc: SHARED_DESCRIPTIONS.packice,
-      name: "Banquise",
-      images: GClientPackice.IMAGES
     },
-    {
-      create: (imageLoader) => {
-        return new GClientPaint(imageLoader);
-      },
-      desc: SHARED_DESCRIPTIONS.paint,
-      name: "Paint",
-      images: GClientPaint.IMAGES
+    clientFrame(snapshot, memory, playerIndex, client) {
+      for (let i = 0; i < snapshot.players.length; i++) {
+        if (i == playerIndex)
+          continue;
+        const vx = snapshot.players[i].vx;
+        const vy = snapshot.players[i].vy;
+        if (vx != 0 || vy != 0) {
+          memory.playerDirections[i] = Math.atan2(vy, vx);
+        }
+      }
+      let dir = client.getJoyStickDirection("move");
+      if (!dir) {
+        dir = { x: 0, y: 0 };
+      }
+      if (dir.x != memory.lastSentX || dir.y != memory.lastSentY) {
+        memory.lastSentX = dir.x;
+        memory.lastSentY = dir.y;
+        if (dir.x != 0 || dir.y != 0) {
+          memory.playerDirections[playerIndex] = Math.atan2(dir.y, dir.x);
+        }
+        const writer = new DataWriter();
+        writer.writeFloat32(dir.x);
+        writer.writeFloat32(dir.y);
+        client.addInput(writer.toArrayBuffer());
+      }
+    },
+    handleSubTouchEvent(snapshot, kind, event, screenWidth, screenHeight, canvasWidth, canvasHeight) {
     }
+  };
+  const CLIENT_DESCRIPTIONS = [
+    packice_client,
+    cowboy_client,
+    test_client
   ];
   let socket = null;
   let isLoading = true;
@@ -844,7 +1323,7 @@
     globalGameId = game;
     lobbyId = id;
     if (globalGameId >= 0 && globalGameId < CLIENT_DESCRIPTIONS.length) {
-      maxPlayers = CLIENT_DESCRIPTIONS[globalGameId].desc.playerCount;
+      maxPlayers = CLIENT_DESCRIPTIONS[globalGameId].game.playerCount;
     } else {
       maxPlayers = null;
     }
@@ -857,7 +1336,10 @@
     currentPlayerCount = number;
     updateWaitingMenu();
     if (number < 0) {
-      globalGameEngine = CLIENT_DESCRIPTIONS[globalGameId].create(globalImageLoader);
+      globalGameEngine = new ClientGameEngine(
+        globalImageLoader,
+        CLIENT_DESCRIPTIONS[globalGameId]
+      );
       globalGameEngine.playerIndex = -number - 1;
       console.log("Player index:", globalGameEngine.playerIndex);
       hideWaitingMenu();
@@ -870,7 +1352,7 @@
       return;
     const now = Date.now();
     const diff = window.FORCED_LATENCY - (now - lastPackageSendTimestamp);
-    const bufferToSend = globalGameEngine.clientNetwork(reader).toArrayBuffer();
+    const bufferToSend = globalGameEngine.handleNetwork(reader).toArrayBuffer();
     if (diff >= 0) {
       setTimeout(() => {
         lastPackageSendTimestamp = Date.now();
@@ -929,7 +1411,7 @@
         const name = globalRoomUsernames[idx] && globalRoomUsernames[idx].length > 0 ? globalRoomUsernames[idx] : "anonymous";
         return name;
       });
-      leaderboardEntries.push(`#${pos} ${playerNames.join(", ")}`);
+      leaderboardEntries.push(`#${pos + 1} ${playerNames.join(", ")}`);
     }
     showEndGameMenu(playerPosition, leaderboardEntries.join(", "));
   }
@@ -951,7 +1433,8 @@
         return;
       }
       gameList.innerHTML = "";
-      CLIENT_DESCRIPTIONS.forEach((gameDesc, index) => {
+      for (let i = 0; i < CLIENT_DESCRIPTIONS.length; i++) {
+        const gameDesc = CLIENT_DESCRIPTIONS[i];
         const gameItem = document.createElement("div");
         gameItem.className = "gameItem";
         const gameName = document.createElement("div");
@@ -959,15 +1442,16 @@
         gameName.textContent = gameDesc.name;
         const gamePlayers = document.createElement("div");
         gamePlayers.className = "gameItemPlayers";
-        gamePlayers.textContent = `${gameDesc.desc.playerCount} joueur${gameDesc.desc.playerCount > 1 ? "s" : ""}`;
+        const pc = gameDesc.game.playerCount;
+        gamePlayers.textContent = `${pc} joueur${pc > 1 ? "s" : ""}`;
         gameItem.appendChild(gameName);
         gameItem.appendChild(gamePlayers);
         gameItem.addEventListener("click", () => {
           gameMenu.classList.remove("show");
-          resolve(index);
+          resolve(i);
         });
         gameList.appendChild(gameItem);
-      });
+      }
       gameMenu.classList.add("show");
       const handleCancel = () => {
         gameMenu.classList.remove("show");
@@ -1060,7 +1544,7 @@
     const endGameLeaderboard = document.getElementById("endGameLeaderboard");
     if (endGameMenu) {
       if (endGamePlayerPosition) {
-        endGamePlayerPosition.textContent = `#${playerPosition}`;
+        endGamePlayerPosition.textContent = `Top #${playerPosition + 1}`;
       }
       if (endGameLeaderboard) {
         endGameLeaderboard.textContent = leaderboardText;
@@ -1114,7 +1598,7 @@
     const ctx = _ctx;
     gameEngine.setCanvas(gameCanvas);
     gameEngine.start();
-    socket?.send(gameEngine.clientNetwork(null).toArrayBuffer());
+    socket?.send(gameEngine.handleNetwork(null).toArrayBuffer());
     gameCanvas.style.display = "block";
     gameCanvas.width = window.innerWidth;
     gameCanvas.height = window.innerHeight;
@@ -1123,12 +1607,16 @@
       gameCanvas.height = window.innerHeight;
     };
     window.addEventListener("resize", handleResize);
+    let lastFrameDate = Date.now();
     function gameLoop() {
+      const now = Date.now();
+      gameEngine.runFrame(now - lastFrameDate);
+      lastFrameDate = now;
       const screenArea = Math.sqrt(
         window.innerWidth * window.innerWidth + window.innerHeight * window.innerHeight
       );
       ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
-      gameEngine.drawGame(ctx);
+      gameEngine.draw(ctx);
       gameEngine.drawJoysticks(ctx, screenArea);
       updateTimerDisplay(gameEngine);
       animationFrameId = requestAnimationFrame(gameLoop);
