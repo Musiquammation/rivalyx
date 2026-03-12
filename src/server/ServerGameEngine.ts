@@ -5,13 +5,6 @@ import { CLIENT_IDS } from "../net/CLIENT_IDS";
 import { getTimestamp } from "../getTimestamp";
 
 
-const DEBUG = false;
-function printDebug(...data: any[]) {
-	if (!DEBUG)
-		return;
-
-	console.log(...data);
-}
 
 type PlayerRanking = number[];
 
@@ -33,15 +26,15 @@ const MAX_FRAME_DURATION = 10;
 export class ServerGameEngine {
 	private timelines: Timeline[];
 	private inputs: Input[] = [];
-	private sharedSnapshot: any;
-	private readonly pureLeftFlag: number;
-
+	private snapshot: any;
+	private startFlag: number;
+	private dead = false;
 
 	object: GameInterface<any>;
 
 	constructor(object: GameInterface<any>) {
 		this.object = object;
-		this.sharedSnapshot = object.createSnapshot(true);
+		this.snapshot = object.createSnapshot(true);
 
 		const count = object.playerCount;
 		const timelines: Timeline[] = [];
@@ -51,7 +44,7 @@ export class ServerGameEngine {
 			});
 		}
 
-		this.pureLeftFlag = (1<<count) - 1;
+		this.startFlag = (1<<count) - 1;
 		this.timelines = timelines;
 	}
 
@@ -91,7 +84,7 @@ export class ServerGameEngine {
 			newInputs.push({
 				date,
 				user,
-				leftFlag: this.pureLeftFlag,
+				leftFlag: this.startFlag,
 				content: this.object.extractInput(reader)
 			});
 		}
@@ -100,7 +93,7 @@ export class ServerGameEngine {
 		newInputs.push({
 			date: clientDate,
 			user,
-			leftFlag: this.pureLeftFlag,
+			leftFlag: this.startFlag,
 			content: null
 		});
 
@@ -182,43 +175,46 @@ export class ServerGameEngine {
 		}
 	}
 
+	private update(flag: number) {
+		// Get idx
+		this.consumeEvents(flag);
+		const idx = this.simulate(this.snapshot);
 
-	handleMessage(reader: DataReader, user: number) {
+		// Delete old inputs and move shared snapshot
+		if (idx > 0) {
+			this.inputs.splice(0, idx);
+		}
+
+	}
+
+
+	handleMessage(reader: DataReader, writer: DataWriter , user: number) {
 		const clientDate = reader.readUint32();
 
 		// Collect inputs
 		this.appendInputs(reader, user, clientDate);
 		
-		
-		// Get indice
-		const inputs = this.inputs;
-		this.consumeEvents(~(1<<user));
-		const idx = this.simulate(this.sharedSnapshot);
+		if (this.dead)
+			return;
 
-		// Delete old inputs and move shared snapshot
-		if (idx > 0) {
-			printDebug("date: " + (Math.floor(inputs[idx].date/1000)%300).toString().padStart(3, '0'));
-			inputs.splice(0, idx);
-		}
+		this.update(~(1<<user));
 
-		printDebug("u" + user + " {");
-		inputs.forEach(x => printDebug("\t", (Math.floor(x.date/1000)%300).toString().padStart(3, '0'), "u"+x.user, x.leftFlag, x.content ? new Uint8Array(x.content).join("-") : null));
-		printDebug("}");
-
-		
 		// Send data
-		const writer = new DataWriter();
 		writer.writeInt8(CLIENT_IDS.GAME_DATA);
 		writer.writeUint32(getTimestamp());
-		this.object.writeNetworkDesc(this.sharedSnapshot, writer);
+		this.object.writeNetworkDesc(this.snapshot, writer);
 
-		printDebug("send", (Math.floor(inputs[0].date/1000)%300).toString().padStart(3, '0'));
 		writer.writeUint32(this.inputs[0].date);
 		this.writeInputs(writer);
-		
-		writer.writeInt8(CLIENT_IDS.FINISH);
-		return writer;
 	}
+
+	disconnectPlayer(user: number) {
+		const flag = ~(1<<user);
+		this.startFlag &= flag;
+		this.update(flag);
+	}
+
+
 
 	private runFrame(snapshot: any, duration: number) {
 		while (duration >= MAX_FRAME_DURATION) {
@@ -227,5 +223,15 @@ export class ServerGameEngine {
 		}
 
 		this.object.frame(snapshot, duration);
+	}
+
+	getLeaderboard() {
+		const l = this.object.getLeaderboard(this.snapshot);
+
+		if (l === null)
+			return null;
+
+		this.dead = true;
+		return l;
 	}
 }

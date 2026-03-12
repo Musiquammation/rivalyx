@@ -41,6 +41,14 @@ export const test_game: GameInterface<Snapshot> = {
 		}
 	},
 
+	getLeaderboard(snapshot: Snapshot) {
+		return null;
+	},
+
+	killPlayer(snapshot: Snapshot, user: number) {
+
+	},
+
 	readNetworkDesc(snapshot: Snapshot, reader: DataReader) {
 		for (let player of snapshot.players) {
 			player.x = reader.readFloat32();

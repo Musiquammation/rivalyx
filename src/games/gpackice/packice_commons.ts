@@ -3,7 +3,7 @@ class Player {
 	y: number;
 	vx = 0;
 	vy = 0;
-	eliminationFrame = -1;
+	alive = true;
 
 	constructor(x: number, y: number) {
 		this.x = x;
@@ -54,14 +54,14 @@ class Player {
 
 
 class ServData {
-
+	killedPlayers: number[] = [];
 }
 
 class Snapshot {
 	static readonly TILES_X = 9;
 	static readonly TILES_Y = 21;
-	static readonly LIFETIME = 6000;
-	static readonly SEND_RANGE = 2;
+	static readonly LIFETIME = 12 * 1000;
+	static readonly SEND_RANGE = 3;
 	static readonly PLAYER_RADIUS = 40;
 
 	players: Player[] = [
@@ -72,6 +72,7 @@ class Snapshot {
 	tiles = new Int16Array(Snapshot.TILES_Y * Snapshot.TILES_X);
 
 	servData: ServData | null;
+	frame = 0;
 
 	constructor(isServer: boolean) {
 		this.servData = isServer ? new ServData() : null;
@@ -100,6 +101,32 @@ class Snapshot {
 	}
 
 
+	getLeaderboard() {
+		const len = this.players.length
+		if (!this.servData)
+			return null;
+
+		const killedPlayers = this.servData.killedPlayers;
+		if (killedPlayers.length < this.players.length) {
+			return null;
+		}
+
+		const leaderboard = new Array<number>(len);
+
+		for (let i = 0; i < len; i++) {
+			leaderboard[killedPlayers[i]] = len - i - 1;
+		}
+		return leaderboard;
+	}
+
+	killPlayer(idx: number) {
+		if (this.servData && this.players[idx].alive) {
+			console.log("Kill " + idx);
+			this.servData.killedPlayers.push(idx);
+			this.players[idx].alive = false;
+		}
+
+	}
 
 	static getIdx(x: number, y: number) {
 		if (x < 0 || y < 0 || x >= Snapshot.TILES_X || y >= Snapshot.TILES_Y)
