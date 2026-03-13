@@ -19,7 +19,7 @@ interface Memory {
 
 export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 	game: cowboy_game,
-	name: "Pingouins",
+	name: "Cowboy",
 
 	images: {
 		playerRed: "assets/gpackice/player-red.svg",

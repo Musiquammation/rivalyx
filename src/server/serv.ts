@@ -109,6 +109,21 @@ class Session {
 const lobbies = new Map<string, Lobby>();
 const sessions: Session[] = [];
 
+function removeSession(session: Session) {
+	console.log("Finish session " + session.hash);
+
+	for (let p of session.players) {
+		p.session = null;
+		p.index = -1;
+	}
+
+	const index = sessions.indexOf(session);
+    if (index !== -1) {
+        sessions.splice(index, 1);
+    }
+
+}
+
 
 // Generate a random 16-character hex string (8 bytes = hash256)
 function generateLobbyHash(): string {
@@ -334,10 +349,11 @@ function handleGameData(reader: DataReader, player: Player) {
 		writer.writeUint8(CLIENT_IDS.FINISH);
 		
 		const buffer = writer.toArrayBuffer();
-		for (let player of session.players) {
+		for (const player of session.players) {
 			player.socket.send(buffer);
 		}
 
+		removeSession(session);
 	}
 
 	return true;
