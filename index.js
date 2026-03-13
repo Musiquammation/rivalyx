@@ -704,7 +704,7 @@
   };
   const cowboy_client = {
     game: cowboy_game,
-    name: "Pingouins",
+    name: "Cowboy",
     images: {
       playerRed: "assets/gpackice/player-red.svg",
       playerBlue: "assets/gpackice/player-blue.svg",
