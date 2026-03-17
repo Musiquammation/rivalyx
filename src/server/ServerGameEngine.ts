@@ -184,7 +184,6 @@ export class ServerGameEngine {
 		if (idx > 0) {
 			this.inputs.splice(0, idx);
 		}
-
 	}
 
 

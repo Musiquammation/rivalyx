@@ -9,7 +9,7 @@ const Snapshot = gpackice.Snapshot;
 type Snapshot = InstanceType<typeof gpackice.Snapshot>;
 
 const PLAYER_SPEED = 0.4;
-const TILE_MODULO = 5 * 1000;
+const TILE_MODULO = Snapshot.TILE_MODULO;
 
 
 export const packice_game: GameInterface<Snapshot> = {
@@ -103,7 +103,7 @@ export const packice_game: GameInterface<Snapshot> = {
 
 		// Read tiles
 		for (const tile of snapshot.onSquare()) {
-			snapshot.tiles[tile.idx] = tile.value;
+			snapshot.tiles[tile.idx] = reader.readInt16();
 		}
 
 	},
@@ -116,6 +116,11 @@ export const packice_game: GameInterface<Snapshot> = {
 			writer.writeFloat32(player.vx);
 			writer.writeFloat32(player.vy);
 			writer.writeInt8(player.alive?1:0);
+		}
+
+		// Send tiles
+		for (const tile of snapshot.onSquare()) {
+			writer.writeInt16(tile.value);
 		}
 	}
 }

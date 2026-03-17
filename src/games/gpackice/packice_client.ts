@@ -19,14 +19,35 @@ interface Memory {
 	lastSentY: number;
 }
 
+function drawRoundedRect(
+	ctx: CanvasRenderingContext2D,
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+	radius: number
+) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.arcTo(x + width, y, x + width, y + radius, radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.arcTo(x + width, y + height, x + width - radius, y + height, radius);
+    ctx.lineTo(x + radius, y + height);
+    ctx.arcTo(x, y + height, x, y + height - radius, radius);
+    ctx.lineTo(x, y + radius);
+    ctx.arcTo(x, y, x + radius, y, radius);
+    ctx.closePath();
+    ctx.fill();
+}
+
 export const packice_client: ClientInterface<Snapshot, Memory> = {
 	game: packice_game,
 	name: "Pingouins",
 
 	images: {
 		playerRed: "assets/gpackice/player-red.svg",
-		playerBlue: "assets/gpackice/player-blue.svg",
-		floor: "assets/gpackice/floor.svg",
+		playerBlue: "assets/gpackice/player-blue.svg"
 	},
 
 	gameSize: {width: 1080, height: 2400},
@@ -74,18 +95,22 @@ export const packice_client: ClientInterface<Snapshot, Memory> = {
 		applyToScreen();
 
 		// Draw tiles
-		const floorImg = imageLoader.getImage("floor");
 		let tile = 0;
+		ctx.save();
 		for (let y = 0; y < TILES_Y; y++) {
 			for (let x = 0; x < TILES_X; x++) {
 				const line = snapshot.tiles[tile];
-				ctx.save();
-				ctx.globalAlpha = line / Snapshot.LIFETIME;
-				ctx.drawImage(floorImg, 100*x + 90, 100*y + 140, 100, 100);
-				ctx.restore();
 				tile++;
+
+				if (line === 0)
+					continue;
+
+				ctx.fillStyle = `rgba(255,255,255,${line/Snapshot.LIFETIME})`;
+				drawRoundedRect(ctx, 100*x+100, 100*y+150, 80, 80, 10);
 			}
 		}
+		ctx.restore();
+
 
 
 		const imagesNames = ["playerRed", "playerBlue"];

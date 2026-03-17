@@ -66,6 +66,7 @@ class Snapshot {
 	static readonly LIFETIME = 12 * 1000;
 	static readonly SEND_RANGE = 3;
 	static readonly PLAYER_RADIUS = 40;
+	static readonly TILE_MODULO = 5 * 1000;
 
 	players: Player[] = [
 		new Player(540, 290),

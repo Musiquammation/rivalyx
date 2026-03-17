@@ -546,6 +546,7 @@ function startGame() {
 		
 		// Continue loop
 		animationFrameId = requestAnimationFrame(gameLoop);
+
 	}
 	
 	// Start the loop
