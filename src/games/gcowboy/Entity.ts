@@ -169,7 +169,15 @@ export abstract class Entity {
 
 		this.x = np.x;
 		this.y = np.y;
-
-
 	}
+
+    isOutsideBox(box: {left: number, right: number, top: number, bottom: number}) {
+        const size = this.getSize();
+        return (
+            this.x + size.w / 2 < box.left ||
+            this.x - size.w / 2 > box.right ||
+            this.y + size.h / 2 < box.top ||
+            this.y - size.h / 2 > box.bottom
+        );
+    }
 }

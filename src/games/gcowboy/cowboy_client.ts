@@ -119,6 +119,9 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 		const imagesNames = ["playerRed", "playerBlue"];
 		for (let i = 0; i < 2; i++) {
 			const player = snapshot.map.players[i];
+			if (player.respawnCouldown > 0)
+				continue;
+
 			const px = player.x;
 			const py = player.y;
 
@@ -148,9 +151,9 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 		playerIndex: number, client: ClientGameEngine
 	) {
 		const player = snapshot.map.players[playerIndex];
-		if (player.respawnCouldown < 0) {
+		if (player.respawnCouldown <= 0) {
 			memory.respawnCouldown = -1;
-		} else if (memory.respawnCouldown >= 0) {
+		} else if (memory.respawnCouldown > 0) {
 			memory.respawnCouldown -= 1000/60;
 		} else {
 			memory.respawnCouldown = Player.RESPAWN_COULDOWN;
@@ -193,8 +196,13 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 
 
 		// Update camera
-		memory.camX = player.x;
-		memory.camY = player.y;
+		if (player.respawnCouldown >= 0) {
+			memory.camX = 0;
+			memory.camY = 0;
+		} else {
+			memory.camX = player.x;
+			memory.camY = player.y;
+		}
 	},
 
 	handleSubTouchEvent(

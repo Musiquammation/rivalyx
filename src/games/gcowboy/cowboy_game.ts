@@ -42,11 +42,24 @@ export const cowboy_game: GameInterface<Snapshot> = {
 
 		// Players
 		for (let player of map.players) {
+			if (player.runCouldowns(speed))
+				continue;
+
 			player.frame(speed);
 			player.applyCollisions(map, speed);
 
 			if (player.mustReleaseStar) {
-				player.releaseStar(map);
+				player.releaseStar(
+					map,
+					player.mustReleaseStar.x,
+					player.mustReleaseStar.y
+				);
+
+				player.mustReleaseStar = null;
+			}
+
+			if (player.isOutsideBox(map.gameBox)) {
+				player.kill();
 			}
 		}
 
@@ -66,6 +79,12 @@ export const cowboy_game: GameInterface<Snapshot> = {
 			// Collision with players
 			for (let i = map.stars.length - 1; i >= 0; i--) {
 				const star = map.stars[i];
+				if (star.isOutsideBox(map.gameBox)) {
+					map.stars.splice(i, 1);
+					continue;
+				}
+
+
 				if (star.deadtime > 0)
 					continue;
 
@@ -105,12 +124,13 @@ export const cowboy_game: GameInterface<Snapshot> = {
 
 			if (lifeFlag === -1) {
 				player.sessionAlive = false;
+				player.respawnCouldown = Player.RESPAWN_COULDOWN;
 				continue;
 			}
 			
 			player.sessionAlive = true;
 			if (lifeFlag === 0) {
-				player.respawnCouldown = 1;
+				player.respawnCouldown = Player.RESPAWN_COULDOWN;
 				continue;
 			}
 

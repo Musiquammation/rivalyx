@@ -9,6 +9,13 @@ export class GameMap {
     blocks: Block[] = [];
     stars: Star[] = [];
 	players: Player[];
+    
+    gameBox = {
+        left: -1600,
+        top: -900,
+        right: 1600,
+        bottom: 900
+    };
 
     private starCouldown = STAR_COULDOWN;
 

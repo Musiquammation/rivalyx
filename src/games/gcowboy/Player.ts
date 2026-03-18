@@ -34,23 +34,27 @@ export class Player extends Entity {
 	respawnCouldown = -1;
 	jumps = Player.JUMPS;
 	stars = 0;
-	mustReleaseStar = false;
+	mustReleaseStar: {x: number, y: number} | null = null;
 	immuneCouldown = Player.IMMUNE_COULDOWN;
 
 	constructor(x: number, y: number) {
 		super(x, y, 0, 0);
 	}
-	
 
-	frame(speed: number) {
-		if (this.respawnCouldown >= 0) {
+	
+	runCouldowns(speed: number) {
+		console.log(this.respawnCouldown);
+		if (this.respawnCouldown > 0) {
 			this.respawnCouldown -= speed;
-			if (this.respawnCouldown >= 0)
-				return;
+			if (this.respawnCouldown > 0)
+				return true;
 		}
 
 		this.immuneCouldown -= speed;
+		return false;
+	}
 
+	frame(speed: number) {
 		// Adapt speed
 		if (this.dirX > 0) {
 			const maxSpeed = Player.MAX_SPEED * this.dirX;
@@ -133,7 +137,7 @@ export class Player extends Entity {
 
 
 
-	releaseStar(map: GameMap) {
+	releaseStar(map: GameMap, x: number, y: number) {
 		// Release a star
 		if (this.stars <= 0)
 			return;
@@ -151,17 +155,16 @@ export class Player extends Entity {
 	hit() {
 		if (this.immuneCouldown <= 0) {
 			this.immuneCouldown = Player.IMMUNE_COULDOWN;
-			this.mustReleaseStar = true;
+			this.mustReleaseStar = {x: this.x, y: this.y};
 		}
 	}
 	
 	kill() {
-		this.mustReleaseStar = true;
-		
+		this.mustReleaseStar = {x: this.x, y: this.y - Player.HEIGHT};	
 		this.immuneCouldown = Player.IMMUNE_COULDOWN;
 		this.respawnCouldown = Player.RESPAWN_COULDOWN;
-		this.x = Infinity; // Place nowhere on the map
-		this.y = Infinity;
+		this.x = 0;
+		this.y = 0;
 	}
 
 	override resetJumps() {
