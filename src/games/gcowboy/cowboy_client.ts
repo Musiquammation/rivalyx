@@ -21,6 +21,7 @@ type Snapshot = InstanceType<typeof gcowboy.Snapshot>;
 class Memory {
 	sentX = NaN;
 	sentFlag = 0;
+	respawnCouldown = -1;
 
 	camX = 0;
 	camY = 0;
@@ -146,12 +147,16 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 		snapshot: Snapshot, memory: Memory,
 		playerIndex: number, client: ClientGameEngine
 	) {
-		for (let i = 0; i < snapshot.map.players.length; i++) {
-			if (i == playerIndex)
-				continue;
-
+		const player = snapshot.map.players[playerIndex];
+		if (player.respawnCouldown < 0) {
+			memory.respawnCouldown = -1;
+		} else if (memory.respawnCouldown >= 0) {
+			memory.respawnCouldown -= 1000/60;
+		} else {
+			memory.respawnCouldown = Player.RESPAWN_COULDOWN;
 		}
 
+		
 		let dir = client.getJoyStickDirection('move');
 		if (!dir) {
 			dir = {x: 0, y: 0};
@@ -185,6 +190,11 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 			writer.writeUint8(flag);
 			client.addInput(writer.toArrayBuffer());
 		}
+
+
+		// Update camera
+		memory.camX = player.x;
+		memory.camY = player.y;
 	},
 
 	handleSubTouchEvent(

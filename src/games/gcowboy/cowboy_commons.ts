@@ -6,7 +6,8 @@ type Action = 'idle' | 'dive';
 
 
 class ServData {
-	killedPlayers: number[] = [];
+	leaderboard: number[] | null = null;
+	sessionDeadPlayers = 0;
 }
 
 
@@ -16,7 +17,7 @@ class Snapshot {
 	static readonly PLAYER_COUNT = 2;
 
 	map: GameMap;
-
+	starsToWin = 10;
 
 	servData: ServData | null;
 	frame = 0;
@@ -35,29 +36,21 @@ class Snapshot {
 	}
 
 
+	produceLeaderboard() {
+		
+	}
 
 	getLeaderboard() {
-		const len = this.map.players.length;
 		if (!this.servData)
 			return null;
 
-		const killedPlayers = this.servData.killedPlayers;
-		if (killedPlayers.length < this.map.players.length) {
-			return null;
-		}
-
-		const leaderboard = new Array<number>(len);
-
-		for (let i = 0; i < len; i++) {
-			leaderboard[killedPlayers[i]] = len - i - 1;
-		}
-		return leaderboard;
+		return this.servData.leaderboard;
 	}
 
 	killPlayer(idx: number) {
-		if (this.servData && this.map.players[idx].alive) {
-			this.servData.killedPlayers.push(idx);
-			this.map.players[idx].alive = false;
+		if (this.servData && this.map.players[idx].sessionAlive) {
+			this.map.players[idx].sessionAlive = false;
+			this.map.players[idx].stars = -(++this.servData.sessionDeadPlayers);
 		}
 	}
 	

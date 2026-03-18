@@ -24,4 +24,19 @@ export namespace collision {
             x2, y2, cw, ch
         );
     }
+
+    export function centeredRect_centeredRect(
+        cx1: number, cy1: number, cw1: number, ch1: number,
+        cx2: number, cy2: number, cw2: number, ch2: number
+    ) {
+        const halfW1 = cw1 * 0.5;
+        const halfH1 = ch1 * 0.5;
+        const halfW2 = cw2 * 0.5;
+        const halfH2 = ch2 * 0.5;
+
+        return rect_rect(
+            cx1 - halfW1, cy1 - halfH1, cw1, ch1,
+            cx2 - halfW2, cy2 - halfH2, cw2, ch2
+        );
+    }
 }

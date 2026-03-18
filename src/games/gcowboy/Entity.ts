@@ -1,3 +1,4 @@
+import { Block } from "./Block";
 import { collision } from "./collision";
 import { GameMap } from "./GameMap";
 
@@ -40,14 +41,17 @@ export abstract class Entity {
     resetJumps() {}
     onPlatform(
         behavior: EntityBehavior,
-        previousSpeed: {vx: number, vy: number}
+        prev_vx: number, prev_vy: number,
+        block: Block
     ) {}
 
 
     applyCollisions(map: GameMap, speed: number) {
         const es = this.getSize();
 		const lp = {x: this.x, y: this.y};
-        const previousSpeed = {vx: this.vx, vy: this.vy};
+        const prev_vx = this.vx;
+        const prev_vy = this.vy;
+
 		const np = {
 			x: this.x + this.vx * speed,
 			y: this.y + this.vy * speed,
@@ -144,7 +148,7 @@ export abstract class Entity {
 			}
 
 
-			this.onPlatform(behavior, previousSpeed);
+			this.onPlatform(behavior, prev_vx, prev_vy, block);
 
 			if (!collision.rect_centeredRect(
 				block.x, block.y, size.w, size.h,
@@ -155,11 +159,11 @@ export abstract class Entity {
 
 
 			/**
-			 * Player is stillres inside the block: collision must be resolved.
+			 * Entiy is still inside the block: collision must be resolved.
 			 * This situations occurs face to a moving block
 			*/
 
-			console.warn("TODO: player inside a block");
+			console.warn("TODO: entity inside a block");
 		}
 
 

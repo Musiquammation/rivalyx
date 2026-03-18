@@ -29,6 +29,11 @@ export class GameMap {
         this.blocks.push(new Block(0, 0, [
             new mods.MStarSpawner(1)
         ]));
+
+        this.blocks.push(new Block(-400, -200, [
+            new mods.Hit(),
+            new mods.MSize(100, 100)
+        ]))
     }
 
 
@@ -55,7 +60,9 @@ export class GameMap {
             for (const spawner of starSpawners) {
                 s += spawner.luck;
                 if (rand < s) {
-                    this.stars.push(new Star(spawner.x, spawner.y));
+                    this.stars.push(new Star(spawner.x, spawner.y,
+                        Star.SPEED, -Star.JUMP, Star.DEADTIME));
+                        
                     break;
                 }
             }

@@ -35,4 +35,10 @@ export class MStarSpawner extends Mod {
     }
 }
 
+export class Hit extends Mod {
+    override getHit() {
+        return true;
+    }
+}
+
 }

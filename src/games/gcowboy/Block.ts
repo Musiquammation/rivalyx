@@ -52,6 +52,15 @@ export class Block {
         return s;
 	}
 
+	getHit() {
+		for (let m of this.mods)
+			if (m.getHit())
+				return true;
+
+        return false;
+	}
+
+
 	onTouch(player: Entity) {
 		
 	}

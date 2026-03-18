@@ -18,5 +18,8 @@ export abstract class Mod {
 
     getStarSpawn() {return 0;}
     
+    getHit() {return false;}
+    
+    getKill() {return false;}
 }
 

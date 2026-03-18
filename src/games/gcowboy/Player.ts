@@ -1,5 +1,7 @@
-import { Entity, EntityBehavior as CollBehavior } from "./Entity";
+import { Block } from "./Block";
+import { Entity, EntityBehavior } from "./Entity";
 import { GameMap } from "./GameMap";
+import { Star } from "./Star";
 import { collision } from "./collision";
 import { flags } from "./flags";
 
@@ -22,19 +24,33 @@ export class Player extends Entity {
 	static readonly DASH = 3.000;
 
 
+	static readonly RESPAWN_COULDOWN = 3 * 1000;
+	static readonly IMMUNE_COULDOWN = 1 * 1000;
+
+
 	dirX = 0;
 	flags = 0;
-	alive = true;
+	sessionAlive = true;
+	respawnCouldown = -1;
 	jumps = Player.JUMPS;
-
+	stars = 0;
+	mustReleaseStar = false;
+	immuneCouldown = Player.IMMUNE_COULDOWN;
 
 	constructor(x: number, y: number) {
 		super(x, y, 0, 0);
 	}
 	
 
-
 	frame(speed: number) {
+		if (this.respawnCouldown >= 0) {
+			this.respawnCouldown -= speed;
+			if (this.respawnCouldown >= 0)
+				return;
+		}
+
+		this.immuneCouldown -= speed;
+
 		// Adapt speed
 		if (this.dirX > 0) {
 			const maxSpeed = Player.MAX_SPEED * this.dirX;
@@ -117,16 +133,51 @@ export class Player extends Entity {
 
 
 
+	releaseStar(map: GameMap) {
+		// Release a star
+		if (this.stars <= 0)
+			return;
+
+		this.stars--;
+		map.stars.push(new Star(
+			this.x,
+			this.y,
+			(this.flags & flags.LOOK_LEFT) ? -Star.SPEED : Star.SPEED,
+			-Star.JUMP,
+			Star.DEADTIME
+		));
+	}
+
+	hit() {
+		if (this.immuneCouldown <= 0) {
+			this.immuneCouldown = Player.IMMUNE_COULDOWN;
+			this.mustReleaseStar = true;
+		}
+	}
+	
+	kill() {
+		this.mustReleaseStar = true;
+		
+		this.immuneCouldown = Player.IMMUNE_COULDOWN;
+		this.respawnCouldown = Player.RESPAWN_COULDOWN;
+		this.x = Infinity; // Place nowhere on the map
+		this.y = Infinity;
+	}
 
 	override resetJumps() {
 		this.jumps = Player.JUMPS;
 	}
 
-	override onPlatform(behavior: CollBehavior) {
+	override onPlatform(
+		behavior: EntityBehavior,
+		prev_vx: number, prev_vy: number,
+		block: Block
+	) {
+		if (block.getHit()) {
+			this.hit();
+		}
 		
 	}
-
-
 
 
 	override getSize(): { w: number; h: number; } {
