@@ -494,6 +494,7 @@ function startGame() {
 	const _ctx = gameCanvas.getContext("2d");
 	if (!_ctx) return;
 	const ctx = _ctx;
+
 	
 	// Set canvas reference in game engine
 	gameEngine.setCanvas(gameCanvas);
@@ -540,6 +541,7 @@ function startGame() {
 		
 		// Draw joysticks on top
 		gameEngine.drawJoysticks(ctx, screenArea);
+		gameEngine.drawButtons(ctx, screenArea);
 		
 		// Update timer display
 		updateTimerDisplay(gameEngine);

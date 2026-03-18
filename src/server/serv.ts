@@ -332,9 +332,7 @@ function handleGameData(reader: DataReader, player: Player) {
 
 	const msg = session.game.handleMessage(reader, player.index);
 	if (msg) {
-		setTimeout(() => {
-			player.socket.send(msg.toArrayBuffer());		
-		}, 500);
+		player.socket.send(msg.toArrayBuffer());		
 	}
 
 

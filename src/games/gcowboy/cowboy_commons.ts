@@ -1,13 +1,8 @@
-class Player {
-	x: number;
-	y: number;
-	alive = true;
+import { GameMap } from "./GameMap";
+import { Player } from "./Player";
 
-	constructor(x: number, y: number) {
-		this.x = x;
-		this.y = y;
-	}
-}
+type Action = 'idle' | 'dive';
+
 
 
 class ServData {
@@ -18,10 +13,9 @@ class ServData {
 
 
 class Snapshot {
-	players: Player[] = [
-		new Player(540, 290),
-		new Player(540, 2090)
-	];
+	static readonly PLAYER_COUNT = 2;
+
+	map: GameMap;
 
 
 	servData: ServData | null;
@@ -29,17 +23,26 @@ class Snapshot {
 
 	constructor(isServer: boolean) {
 		this.servData = isServer ? new ServData() : null;
+
+		const players: Player[] = [];
+		for (let i = 0; i < Snapshot.PLAYER_COUNT; i++) {
+			players.push(new Player(0, 0));
+		}
+
+
+		this.map = new GameMap(players);
+		this.map.runTest();
 	}
 
 
 
 	getLeaderboard() {
-		const len = this.players.length
+		const len = this.map.players.length;
 		if (!this.servData)
 			return null;
 
 		const killedPlayers = this.servData.killedPlayers;
-		if (killedPlayers.length < this.players.length) {
+		if (killedPlayers.length < this.map.players.length) {
 			return null;
 		}
 
@@ -52,15 +55,21 @@ class Snapshot {
 	}
 
 	killPlayer(idx: number) {
-		if (this.servData && this.players[idx].alive) {
+		if (this.servData && this.map.players[idx].alive) {
 			this.servData.killedPlayers.push(idx);
-			this.players[idx].alive = false;
+			this.map.players[idx].alive = false;
 		}
 	}
 	
 }
 
+
+
+
+
+
+
+
 export const gcowboy = {
 	Snapshot,
 };
-

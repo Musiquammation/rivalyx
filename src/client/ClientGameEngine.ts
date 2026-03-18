@@ -3,7 +3,7 @@ import { getTimestamp } from "../getTimestamp";
 import { DataReader } from "../net/DataReader";
 import { DataWriter } from "../net/DataWriter";
 import { SERVER_IDS } from "../net/SERVER_IDS";
-import { Button } from "./Button";
+import { Button, ButtonPlacement } from "./Button";
 import { ClientInterface } from "./ClientInterface";
 import { ImageLoader } from "./ImageLoader";
 import { Joystick, JoystickPlacement } from "./Joystick";
@@ -162,10 +162,7 @@ export class ClientGameEngine {
 	private simulateInputs(startDate: number, inputs: Input[]) {
 		if (inputs.length === 0) {
 			const date = getTimestamp();
-			this.object.game.frame(
-				this.snapshot,
-				date - startDate
-			);
+			this.runFrame(date - startDate);
 			
 		} else {
 			// Simulate until now
@@ -296,30 +293,53 @@ export class ClientGameEngine {
 			}
 
 			if (kind === 'touchstart') {
-				// Find the closest joystick
-				let closestJoystick: Joystick | null = null;
-				let minDistance = Infinity;
+				// Search button
+				let notFound = true;
+				for (const button of this.buttons) {
+					if (button.activeTouchId !== null)
+						continue;
 
-				for (const joystick of this.joysticks) {
-					if (joystick.activeTouchId !== undefined) continue; // Already active
-					
-					const pos = this.getJoystickPosition(joystick, screenWidth, screenHeight, canvasWidth, canvasHeight);
-					const distance = Math.sqrt(Math.pow(clientX - pos.x, 2) + Math.pow(clientY - pos.y, 2));
-					
-					if (distance < minDistance) {
-						minDistance = distance;
-						closestJoystick = joystick;
+					const pos = this.getButtonPosition(button, screenWidth, screenHeight, canvasWidth, canvasHeight);
+					const halfWidth = button.width / 2;
+					const halfHeight = button.height / 2;
+
+					if (clientX >= pos.x - halfWidth && clientX <= pos.x + halfWidth &&
+						clientY >= pos.y - halfHeight && clientY <= pos.y + halfHeight) {
+						button.activeTouchId = touchId;
+						notFound = false;
+						break;
+					}
+
+				}
+
+				if (notFound) {
+					// Find the closest joystick
+					let closestJoystick: Joystick | null = null;
+					let minDistance = Infinity;
+	
+					for (const joystick of this.joysticks) {
+						if (joystick.activeTouchId !== undefined) continue; // Already active
+						
+						const pos = this.getJoystickPosition(joystick, screenWidth, screenHeight, canvasWidth, canvasHeight);
+						const distance = Math.sqrt(Math.pow(clientX - pos.x, 2) + Math.pow(clientY - pos.y, 2));
+						
+						if (distance < minDistance) {
+							minDistance = distance;
+							closestJoystick = joystick;
+						}
+					}
+	
+					if (closestJoystick) {
+						closestJoystick.activeTouchId = touchId;
+	
+						// Define origin
+						closestJoystick.originX = clientX;
+						closestJoystick.originY = clientY;
+						closestJoystick.stickX = 0;
+						closestJoystick.stickY = 0;
 					}
 				}
 
-				if (closestJoystick) {
-					closestJoystick.activeTouchId = touchId;
-					// Définir l'origine au point de toucher initial
-					closestJoystick.originX = clientX;
-					closestJoystick.originY = clientY;
-					closestJoystick.stickX = 0;
-					closestJoystick.stickY = 0;
-				}
 			} else if (kind === 'touchmove') {
 				// Update joystick position if this touch is controlling one
 				for (const joystick of this.joysticks) {
@@ -329,17 +349,30 @@ export class ClientGameEngine {
 					}
 				}
 			} else if (kind === 'touchend' || kind === 'touchcancel') {
-				// Release joystick
-				for (const joystick of this.joysticks) {
-					if (joystick.activeTouchId === touchId) {
-						joystick.activeTouchId = undefined;
-						joystick.stickX = 0;
-						joystick.stickY = 0;
-						joystick.originX = undefined;
-						joystick.originY = undefined;
+				// Release button
+				let found = false;
+				for (const button of this.buttons) {
+					if (button.activeTouchId === touchId) {
+						button.activeTouchId = null;
+						found = true;
 						break;
 					}
 				}
+
+				if (!found) {
+					// Release joystick
+					for (const joystick of this.joysticks) {
+						if (joystick.activeTouchId === touchId) {
+							joystick.activeTouchId = undefined;
+							joystick.stickX = 0;
+							joystick.stickY = 0;
+							joystick.originX = undefined;
+							joystick.originY = undefined;
+							break;
+						}
+					}
+				}
+
 			}
 		}
 	}
@@ -389,6 +422,13 @@ export class ClientGameEngine {
 		return { x: joystick.stickX, y: joystick.stickY };
 	}
 
+	getButton(label: string) {
+		const button = Array.from(this.buttons).find(j => j.label === label);
+		if (!button) return false;
+		return button.activeTouchId !== null;
+	}
+
+
 	private getJoystickPosition(joystick: Joystick, screenWidth: number, screenHeight: number, 
 		canvasWidth: number, canvasHeight: number): { x: number, y: number } {
 		// Si le joystick a une origine (actif), utiliser cette origine
@@ -432,6 +472,44 @@ export class ClientGameEngine {
 		return { x, y };
 	}
 
+	private getButtonPosition(button: Button, screenWidth: number, screenHeight: number, 
+		canvasWidth: number, canvasHeight: number): { x: number, y: number } {
+		let x: number;
+		let y: number;
+
+		// Calculate X position
+		switch (button.xpl) {
+			case ButtonPlacement.CENTERED:
+				x = screenWidth / 2 + button.x;
+				break;
+			case ButtonPlacement.SCREEN_RATIO:
+				x = screenWidth * button.x;
+				break;
+			case ButtonPlacement.GAME_RATIO:
+				x = canvasWidth * button.x;
+				break;
+			default:
+				x = button.x;
+		}
+
+		// Calculate Y position
+		switch (button.ypl) {
+			case ButtonPlacement.CENTERED:
+				y = screenHeight / 2 + button.y;
+				break;
+			case ButtonPlacement.SCREEN_RATIO:
+				y = screenHeight * button.y;
+				break;
+			case ButtonPlacement.GAME_RATIO:
+				y = canvasHeight * button.y;
+				break;
+			default:
+				y = button.y;
+		}
+
+		return { x, y };
+	}
+
 	drawJoysticks(ctx: CanvasRenderingContext2D, screenArea: number) {
 		if (!this.canvas) return;
 		
@@ -443,7 +521,6 @@ export class ClientGameEngine {
 		for (const joystick of this.joysticks) {
 			joystick.updateRatio(screenArea);
 
-			// Ne dessiner que si le joystick est actif
 			// if (joystick.activeTouchId === undefined) continue;
 
 			const pos = this.getJoystickPosition(joystick, screenWidth, screenHeight, canvasWidth, canvasHeight);
@@ -463,6 +540,35 @@ export class ClientGameEngine {
 			ctx.beginPath();
 			ctx.arc(pos.x + stickX * radius * 0.6, pos.y + stickY * radius * 0.6, stickRadius, 0, Math.PI * 2);
 			ctx.fill();
+		}
+	}
+
+	drawButtons(ctx: CanvasRenderingContext2D, screenArea: number) {
+		if (!this.canvas) return;
+
+		const screenWidth = window.innerWidth;
+		const screenHeight = window.innerHeight;
+		const canvasWidth = this.canvas.width;
+		const canvasHeight = this.canvas.height;
+
+		for (const button of this.buttons) {
+			button.updateRatio(screenArea);
+
+			const pos = this.getButtonPosition(button, screenWidth, screenHeight, canvasWidth, canvasHeight);
+			const width = button.width;
+			const height = button.height;
+
+			// Draw button
+			const color = button.activeTouchId === null ?
+				button.color.idle : button.color.pressed;
+
+			ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.5)`;
+			ctx.fillRect(pos.x - width / 2, pos.y - height / 2, width, height);
+
+			// Draw border
+			ctx.strokeStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 1.0)`;
+			ctx.lineWidth = 3;
+			ctx.strokeRect(pos.x - width / 2, pos.y - height / 2, width, height);
 		}
 	}
 }

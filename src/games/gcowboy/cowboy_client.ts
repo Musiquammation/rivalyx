@@ -5,16 +5,26 @@ import { cowboy_game } from "./cowboy_game";
 import { gcowboy } from "./cowboy_commons";
 import { Joystick, JOYSTICK_COLORS, JoystickPlacement } from "../../client/Joystick";
 import { DataWriter } from "../../net/DataWriter";
+import { drawBlock } from "./drawBlock";
+import { Player } from "./Player";
+import { flags } from "./flags";
+import { Button, BUTTON_COLORS, ButtonPlacement } from "../../client/Button";
+import { Star } from "./Star";
 
 
 const Snapshot = gcowboy.Snapshot;
 type Snapshot = InstanceType<typeof gcowboy.Snapshot>;
 
 
-interface Memory {
-	playerDirections: number[];
-	lastSentX: number;
-	lastSentY: number;
+
+
+class Memory {
+	sentX = NaN;
+	sentFlag = 0;
+
+	camX = 0;
+	camY = 0;
+	camZ = 1;
 }
 
 export const cowboy_client: ClientInterface<Snapshot, Memory> = {
@@ -24,10 +34,9 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 	images: {
 		playerRed: "assets/gpackice/player-red.svg",
 		playerBlue: "assets/gpackice/player-blue.svg",
-		floor: "assets/gpackice/floor.svg",
 	},
 
-	gameSize: {width: 1080, height: 2400},
+	gameSize: {width: 1600, height: 900},
 
 
 	createMemory(snapshot: Snapshot, client: ClientGameEngine, playerIndex: number) {
@@ -37,12 +46,15 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 			'move'
 		));
 
+
+		client.appendButton(new Button(
+			0.1, 0.9, ButtonPlacement.SCREEN_RATIO, ButtonPlacement.SCREEN_RATIO,
+			playerIndex === 0 ? BUTTON_COLORS.red : BUTTON_COLORS.blue,
+			'jump', 1, 1
+		));
+
 		
-		return {
-			playerDirections: [Math.PI * 1/2, Math.PI * 3/2],
-			lastSentX: Infinity,
-			lastSentY: Infinity,
-		};
+		return new Memory();
 	},
 
 	getTimer(snapshot: Snapshot) {
@@ -72,25 +84,59 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 		applyToScreen();
 
 
-		const imagesNames = ["playerRed", "playerBlue"];
 
+		// Apply to camera
+		ctx.save();
+		ctx.translate(800, 450);
+		ctx.scale(memory.camZ, memory.camZ);
+		ctx.translate(-memory.camX, -memory.camY);
+
+
+		// Draw blocks
+		for (const block of snapshot.map.blocks) {
+			drawBlock(ctx, block);
+		}
+
+		// Draw stars
+		const starImg = imageLoader.getImage("");
+		for (const star of snapshot.map.stars) {
+			ctx.save();
+			ctx.translate(star.x, star.y);
+
+			ctx.drawImage(
+				starImg,
+				-Star.WIDTH/2, -Star.HEIGHT/2,
+				Star.WIDTH, Star.HEIGHT
+			);
+
+			ctx.restore();
+		}
+		
+
+		
 		// Draw players
+		const imagesNames = ["playerRed", "playerBlue"];
 		for (let i = 0; i < 2; i++) {
-			const player = snapshot.players[i];
+			const player = snapshot.map.players[i];
 			const px = player.x;
 			const py = player.y;
-			const half = 40;
-			const size = half*2;
 
 			ctx.save();
 			ctx.translate(px, py);
-			ctx.rotate(memory.playerDirections[i]);
+			ctx.scale(
+				(snapshot.map.players[i].flags & flags.LOOK_LEFT) ? -1 : 1,
+				1
+			);
 			ctx.drawImage(
 				imageLoader.getImage(imagesNames[i]),
-				-half, -half, size, size
+				-Player.WIDTH/2, -Player.HEIGHT/2,
+				Player.WIDTH, Player.HEIGHT
 			);
 			ctx.restore();
 		}
+
+		// Cancel camera
+		ctx.restore();
 
 		// Cancel screen apply
 		ctx.restore();
@@ -100,7 +146,7 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 		snapshot: Snapshot, memory: Memory,
 		playerIndex: number, client: ClientGameEngine
 	) {
-		for (let i = 0; i < snapshot.players.length; i++) {
+		for (let i = 0; i < snapshot.map.players.length; i++) {
 			if (i == playerIndex)
 				continue;
 
@@ -111,17 +157,32 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 			dir = {x: 0, y: 0};
 		}
 		
-		if (dir.x != memory.lastSentX || dir.y != memory.lastSentY) {
-			memory.lastSentX = dir.x;
-			memory.lastSentY = dir.y;
-			
-			if (dir.x != 0 || dir.y != 0) {
-				memory.playerDirections[playerIndex] = Math.atan2(dir.y, dir.x);
-			}
+		let flag = memory.sentFlag & flags.WAS_JUMPING;
 
+		// dive
+		if (dir.y < -.8)
+			flag |= flags.DIVE;
+
+		// left or right
+		if (dir.x < 0) {
+			flag |= flags.LOOK_LEFT;
+		} else if (dir.x === 0) {
+			flag |= memory.sentFlag & flags.LOOK_LEFT;
+		}
+
+		// jump
+		if (client.getButton('jump')) {
+			flag |= flags.JUMP;
+		}
+
+
+		if (dir.x != memory.sentX || flag != memory.sentFlag) {
+			memory.sentX = dir.x;
+			memory.sentFlag = flag;
+			
 			const writer = new DataWriter();
 			writer.writeFloat32(dir.x);
-			writer.writeFloat32(dir.y);
+			writer.writeUint8(flag);
 			client.addInput(writer.toArrayBuffer());
 		}
 	},
