@@ -5,7 +5,8 @@ import { ServerGameEngine } from "../../server/ServerGameEngine";
 import { GameInterface } from "../../GameInterface";
 import { gcowboy } from "./cowboy_commons";
 import { Star } from "./Star";
-import { Player } from "./Player";
+import { checkPlayerCollisions, Player } from "./Player";
+import { PowerUpEntity, powerups } from "./PowerUp";
 
 const Snapshot = gcowboy.Snapshot;
 type Snapshot = InstanceType<typeof gcowboy.Snapshot>;
@@ -40,6 +41,11 @@ export const cowboy_game: GameInterface<Snapshot> = {
 	frame(snapshot: Snapshot, speed: number) {
 		const map = snapshot.map;
 
+		// Map frames
+		for (const block of map.blocks) {
+			block.runFrame(map, speed);
+		}
+
 		// Players
 		for (let player of map.players) {
 			if (player.runCouldowns(speed))
@@ -63,6 +69,12 @@ export const cowboy_game: GameInterface<Snapshot> = {
 			}
 		}
 
+		// Powerups
+		for (let powerup of map.powerups) {
+			powerup.vy += Star.GRAVITY * speed; // gravity
+			powerup.applyCollisions(map, speed);
+		}
+
 
 		// Stars
 		for (let star of map.stars) {
@@ -72,11 +84,11 @@ export const cowboy_game: GameInterface<Snapshot> = {
 		}
 
 
-		// Stars
 		if (snapshot.servData) {
+			// Stars
 			map.spawnStars(speed);
 
-			// Collision with players
+			// Collision with players (stars)
 			for (let i = map.stars.length - 1; i >= 0; i--) {
 				const star = map.stars[i];
 				if (star.isOutsideBox(map.gameBox)) {
@@ -88,21 +100,37 @@ export const cowboy_game: GameInterface<Snapshot> = {
 				if (star.deadtime > 0)
 					continue;
 
-				const starCount = star.checkPlayerCollisions(map.players);
-				if (starCount < 0)
+				const touched = checkPlayerCollisions(star, map.players);
+				if (touched === null)
 					continue;
 
-				if (starCount >= snapshot.starsToWin) {
+				if ((++touched.stars) >= snapshot.starsToWin) {
 					snapshot.produceLeaderboard();
 				}
 
 				map.stars.splice(i, 1);
 			}
 
+			// Collisions with players (powerups)
+			for (let i = map.powerups.length - 1; i >= 0; i--) {
+				const powerup = map.powerups[i];
+				if (powerup.isOutsideBox(map.gameBox)) {
+					map.powerups.splice(i, 1);
+					continue;
+				}
+
+				const touched = checkPlayerCollisions(powerup, map.players);
+				if (touched === null)
+					continue;
+
+				touched.powerup = powerups.produce(powerup.type);
+				map.powerups.splice(i, 1);
+
+			}
+
 		}
 
 		snapshot.frame += speed;
-
 	},
 
 
@@ -145,6 +173,10 @@ export const cowboy_game: GameInterface<Snapshot> = {
 			player.stars = reader.readUint8();
 			player.jumps = reader.readInt8();
 			player.immuneCouldown = reader.readUint8() * (Player.IMMUNE_COULDOWN/250);
+			
+			const type = reader.readUint8();
+			player.powerup = powerups.produce(type);
+			powerups.recv(reader, player.powerup);
 		}
 
 		// Read stars
@@ -159,6 +191,20 @@ export const cowboy_game: GameInterface<Snapshot> = {
 
 			const star = new Star(x, y, vx, vy, deadtime);
 			snapshot.map.stars.push(star);
+		}
+
+		// Read powerups
+		const powerUpCount = reader.readUint16();
+		snapshot.map.powerups.length = 0;
+		for (let i = 0; i < powerUpCount; i++) {
+			const x = reader.readFloat32();
+			const y = reader.readFloat32();
+			const vy = reader.readFloat32();
+			const type = reader.readUint8();
+			const vx = reader.readInt8() / 10;
+
+			const powerUp = new PowerUpEntity(x, y, vx, vy, type);
+			snapshot.map.powerups.push(powerUp);
 		}
 	},
 
@@ -185,6 +231,9 @@ export const cowboy_game: GameInterface<Snapshot> = {
 			writer.writeUint8(player.stars);
 			writer.writeInt8(player.jumps);
 			writer.writeInt8(Math.floor(Math.max(player.immuneCouldown,0) * (250/Player.IMMUNE_COULDOWN)));
+
+			writer.writeUint8(powerups.getType(player.powerup));
+			powerups.send(writer, player.powerup);
 		}
 
 		// Send stars
@@ -196,6 +245,17 @@ export const cowboy_game: GameInterface<Snapshot> = {
 			writer.writeFloat32(star.vy);
 			writer.writeInt8(Math.floor(Math.max(star.deadtime,0) * (250/Star.DEADTIME)));
 		}
+
+		// Send powerups
+		writer.writeUint16(snapshot.map.powerups.length);
+		for (const powerUp of snapshot.map.powerups) {
+			writer.writeFloat32(powerUp.x);
+			writer.writeFloat32(powerUp.y);
+			writer.writeFloat32(powerUp.vy);
+			writer.writeUint8(powerUp.type);
+			writer.writeInt8(Math.floor(powerUp.vx * 10));
+		}
+
 	}
 }
 

@@ -1,6 +1,7 @@
 import { Block } from "./Block";
 import { Entity, EntityBehavior } from "./Entity";
 import { GameMap } from "./GameMap";
+import { powerups } from "./PowerUp";
 import { Star } from "./Star";
 import { collision } from "./collision";
 import { flags } from "./flags";
@@ -36,6 +37,7 @@ export class Player extends Entity {
 	stars = 0;
 	mustReleaseStar: {x: number, y: number} | null = null;
 	immuneCouldown = Player.IMMUNE_COULDOWN;
+	powerup = new powerups.Default();
 
 	constructor(x: number, y: number) {
 		super(x, y, 0, 0);
@@ -43,7 +45,6 @@ export class Player extends Entity {
 
 	
 	runCouldowns(speed: number) {
-		console.log(this.respawnCouldown);
 		if (this.respawnCouldown > 0) {
 			this.respawnCouldown -= speed;
 			if (this.respawnCouldown > 0)
@@ -190,3 +191,29 @@ export class Player extends Entity {
 	
 }
 
+
+export function checkPlayerCollisions(entity: Entity, players: Player[]) {
+	const size = entity.getSize();
+	let touched: Player | null = null;
+	for (const player of players) {
+		if (player.respawnCouldown > 0)
+			continue;
+
+		if (!collision.centeredRect_centeredRect(
+			entity.x, entity.y, size.w, size.h,
+			player.x, player.y, Player.WIDTH, Player.HEIGHT
+		)) {
+			continue;
+		}
+
+		if (touched !== null) {
+			// Two players touch at the same time the star
+			return null;
+		}
+
+		touched = player;
+	}
+
+
+	return touched;
+}

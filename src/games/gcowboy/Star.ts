@@ -52,32 +52,5 @@ export class Star extends Entity {
     }
 
 
-    checkPlayerCollisions(players: Player[]) {
-        let touched: Player | null = null;
-        for (const player of players) {
-            if (player.respawnCouldown > 0)
-                continue;
-
-            if (!collision.centeredRect_centeredRect(
-                this.x, this.y, Star.WIDTH, Star.HEIGHT,
-                player.x, player.y, Player.WIDTH, Player.HEIGHT
-            )) {
-                continue;
-            }
-
-            if (touched !== null) {
-                // Two players touch at the same time the star
-                return -2;
-            }
-
-            touched = player;
-        }
-
-
-        if (!touched)
-            return -1;
-
-        touched.stars++;
-        return touched.stars;
-    }
+    
 }

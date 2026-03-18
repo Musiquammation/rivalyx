@@ -10,6 +10,7 @@ import { Player } from "./Player";
 import { flags } from "./flags";
 import { Button, BUTTON_COLORS, ButtonPlacement } from "../../client/Button";
 import { Star } from "./Star";
+import { PowerUpEntity } from "./PowerUp";
 
 
 const Snapshot = gcowboy.Snapshot;
@@ -27,6 +28,15 @@ class Memory {
 	camY = 0;
 	camZ = 1;
 }
+
+
+const POWERUP_TEXTURES = [
+	"powerup-default",
+	"powerup-fire",
+	"powerup-ice",
+	"powerup-shell",
+	"powerup-jump",
+]
 
 export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 	game: cowboy_game,
@@ -98,8 +108,25 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 			drawBlock(ctx, block);
 		}
 
+		// Draw powerups
+		for (const powerup of snapshot.map.powerups) {
+			ctx.save();
+			ctx.translate(powerup.x, powerup.y);
+
+			const path = POWERUP_TEXTURES[powerup.type]
+			ctx.drawImage(
+				imageLoader.getImage(path),
+				-PowerUpEntity.WIDTH/2, -PowerUpEntity.HEIGHT/2,
+				PowerUpEntity.WIDTH, PowerUpEntity.HEIGHT
+			);
+
+
+			ctx.restore();
+
+		}
+
 		// Draw stars
-		const starImg = imageLoader.getImage("");
+		const starImg = imageLoader.getImage("star");
 		for (const star of snapshot.map.stars) {
 			ctx.save();
 			ctx.translate(star.x, star.y);

@@ -1,3 +1,6 @@
+import { Block } from "./Block";
+import { GameMap } from "./GameMap";
+
 export abstract class Mod {
     static readonly NO_COLL = {
         right: false,
@@ -21,5 +24,9 @@ export abstract class Mod {
     getHit() {return false;}
     
     getKill() {return false;}
+
+    hasFrameToRun() {return false;}
+
+    runFrame(map: GameMap, block: Block, speed: number) {}
 }
 

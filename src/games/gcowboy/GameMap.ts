@@ -1,6 +1,7 @@
 import { Block } from "./Block";
 import { mods } from "./mods";
 import { Player } from "./Player";
+import { PowerUpEntity } from "./PowerUp";
 import { Star } from "./Star";
 
 const STAR_COULDOWN = 5*1000;
@@ -9,11 +10,12 @@ export class GameMap {
     blocks: Block[] = [];
     stars: Star[] = [];
 	players: Player[];
+    powerups: PowerUpEntity[] = [];
     
     gameBox = {
-        left: -1600,
-        top: -900,
-        right: 1600,
+        left: -16000,
+        top: -9000,
+        right: 16000,
         bottom: 900
     };
 
@@ -26,20 +28,24 @@ export class GameMap {
 
     runTest() {
         this.blocks.push(new Block(-400, 200, [
-            new mods.MSize(800, 100)
+            new mods.Size(800, 100)
         ]));
 
         this.blocks.push(new Block(400, -200, [
-            new mods.MSize(100, 500)
+            new mods.Size(100, 500)
         ]));
 
         this.blocks.push(new Block(0, 0, [
-            new mods.MStarSpawner(1)
+            new mods.StarSpawner(1)
         ]));
 
         this.blocks.push(new Block(-400, -200, [
             new mods.Hit(),
-            new mods.MSize(100, 100)
+            new mods.Size(100, 100)
+        ]));
+
+        this.blocks.push(new Block(-400, -300, [
+            new mods.PowerupSpawner(1000)
         ]))
     }
 
