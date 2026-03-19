@@ -10,8 +10,9 @@ export function drawBlock(ctx: CanvasRenderingContext2D, block: Block) {
         return;
     }
 
+
     ctx.save();
-    ctx.strokeStyle = "white";
+    ctx.strokeStyle = block.getHit() ? "yellow" : "white";
     ctx.lineWidth = 10;
     ctx.strokeRect(block.x, block.y, size.w, size.h);
     ctx.restore();

@@ -218,10 +218,11 @@ export const gstars_client: ClientInterface<Snapshot, Memory> = {
 
 		const player = snapshot.map.players[playerIndex];
 		
+		const starsCount = player.stars.toString().padStart(2, '0');
+		const starsToWinCount = snapshot.starsToWin.toString().padStart(2, '0');
 		ctx.fillStyle = "yellow";
 		ctx.font = "32px monospace";
-		ctx.fillText(`${player.stars
-			.toString().padStart(2, '0')}/10`, 70, 45);
+		ctx.fillText(`${starsCount}/${starsToWinCount}`, 70, 45);
 
 		// Draw current powerup
 		let powerupImg;
