@@ -11,6 +11,7 @@ import { flags } from "./flags";
 import { Button, BUTTON_COLORS, ButtonPlacement } from "../../client/Button";
 import { Star } from "./Star";
 import { PowerUpEntity } from "./PowerUp";
+import { Projectile, ProjectileType } from "./Projectile";
 
 
 const Snapshot = gcowboy.Snapshot;
@@ -64,6 +65,12 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 			'jump', 1, 1
 		));
 
+		client.appendButton(new Button(
+			0.1, 0.8, ButtonPlacement.SCREEN_RATIO, ButtonPlacement.SCREEN_RATIO,
+			BUTTON_COLORS.yellow,
+			'powerup', 1, 1
+		));
+
 		
 		return new Memory();
 	},
@@ -108,6 +115,26 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 			drawBlock(ctx, block);
 		}
 
+		// Draw projectiles
+		for (const player of snapshot.map.players) {
+			for (const p of player.projectiles) {
+				switch (p.type) {
+				case ProjectileType.ICE:
+					ctx.fillStyle = "#0ff";
+					break;
+					
+				case ProjectileType.FIRE:
+					ctx.fillStyle = "#f70";
+					break;
+				}
+
+				ctx.beginPath();
+				ctx.arc(p.x, p.y, Projectile.RADIUS, 0, 2 * Math.PI);
+				ctx.fill();
+			}
+		}
+
+
 		// Draw powerups
 		for (const powerup of snapshot.map.powerups) {
 			ctx.save();
@@ -122,7 +149,6 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 
 
 			ctx.restore();
-
 		}
 
 		// Draw stars
@@ -192,7 +218,7 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 			dir = {x: 0, y: 0};
 		}
 		
-		let flag = memory.sentFlag & flags.WAS_JUMPING;
+		let flag = memory.sentFlag & flags.WAS_JUMPING & flags.WAS_POWER;
 
 		// dive
 		if (dir.y < -.8)
@@ -208,6 +234,11 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 		// jump
 		if (client.getButton('jump')) {
 			flag |= flags.JUMP;
+		}
+
+		// power
+		if (client.getButton('powerup')) {
+			flag |= flags.POWER;
 		}
 
 

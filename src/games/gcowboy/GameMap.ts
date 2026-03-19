@@ -11,6 +11,7 @@ export class GameMap {
     stars: Star[] = [];
 	players: Player[];
     powerups: PowerUpEntity[] = [];
+    readonly isServer: boolean;
     
     gameBox = {
         left: -16000,
@@ -21,8 +22,9 @@ export class GameMap {
 
     private starCouldown = STAR_COULDOWN;
 
-    constructor(players: Player[]) {
+    constructor(players: Player[], isServer: boolean) {
         this.players = players;
+        this.isServer = isServer;
     }
 
 
@@ -46,7 +48,7 @@ export class GameMap {
 
         this.blocks.push(new Block(-400, -300, [
             new mods.PowerupSpawner(1000)
-        ]))
+        ]));
     }
 
 

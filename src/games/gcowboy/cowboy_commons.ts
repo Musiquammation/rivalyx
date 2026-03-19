@@ -31,12 +31,14 @@ class Snapshot {
 		}
 
 
-		this.map = new GameMap(players);
+		this.map = new GameMap(players, isServer);
 		this.map.runTest();
 	}
 
 
 	produceLeaderboard() {
+		if (!this.servData)
+			return;
 		
 	}
 

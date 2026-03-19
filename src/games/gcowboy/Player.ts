@@ -2,10 +2,10 @@ import { Block } from "./Block";
 import { Entity, EntityBehavior } from "./Entity";
 import { GameMap } from "./GameMap";
 import { powerups } from "./PowerUp";
+import { Projectile } from "./Projectile";
 import { Star } from "./Star";
 import { collision } from "./collision";
 import { flags } from "./flags";
-
 
 
 
@@ -28,6 +28,7 @@ export class Player extends Entity {
 	static readonly RESPAWN_COULDOWN = 3 * 1000;
 	static readonly IMMUNE_COULDOWN = 1 * 1000;
 
+	static readonly FROZE_TIME = 1.5 * 1000;
 
 	dirX = 0;
 	flags = 0;
@@ -38,6 +39,9 @@ export class Player extends Entity {
 	mustReleaseStar: {x: number, y: number} | null = null;
 	immuneCouldown = Player.IMMUNE_COULDOWN;
 	powerup = new powerups.Default();
+	projectiles: Projectile[] = [];
+	froze = 0;
+
 
 	constructor(x: number, y: number) {
 		super(x, y, 0, 0);
@@ -133,6 +137,23 @@ export class Player extends Entity {
 				this.jumps--;
 			}
 		}
+
+		// Power
+		if ((this.flags & flags.POWER) === 0) {
+			this.flags &= ~flags.WAS_POWER;
+			// Stop power
+			powerups.stop(this.powerup, this);
+
+		} else if ((this.flags & flags.WAS_POWER) === 0) {
+			// Update flag
+			this.flags |= flags.WAS_POWER;
+		
+			// Apply power
+			powerups.start(this.powerup, this);
+		} else {
+			// Frame power
+			powerups.use(this.powerup, this);
+		}
 	}
 
 
@@ -187,6 +208,23 @@ export class Player extends Entity {
 	override getSize(): { w: number; h: number; } {
 		return {w: Player.WIDTH, h: Player.HEIGHT};
 	}
+
+	
+
+	onIce(dir: number) {
+		if (this.froze === 0)
+			this.froze = Player.FROZE_TIME;
+	}
+
+	onFire() {
+		if (this.froze > 0) {
+			this.froze = 0;
+			return;
+		}
+
+		this.hit();
+	}
+
 
 	
 }

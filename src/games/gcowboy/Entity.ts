@@ -1,6 +1,7 @@
 import { Block } from "./Block";
 import { collision } from "./collision";
 import { GameMap } from "./GameMap";
+import { ProjectileType } from "./ProjectileType";
 
 export enum EntityBehavior {
 	NONE,
@@ -44,6 +45,7 @@ export abstract class Entity {
         prev_vx: number, prev_vy: number,
         block: Block
     ) {}
+	
 
 
     applyCollisions(map: GameMap, speed: number) {

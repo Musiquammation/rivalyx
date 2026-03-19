@@ -12,8 +12,9 @@ export interface ButtonColor {
 
 
 export const BUTTON_COLORS: {[key: string]: ButtonColor} = {
-	blue: {idle: [35, 65, 165], pressed: [65, 99, 208]},
-	red:  {idle: [148, 45, 45], pressed: [208, 65, 65]}
+	blue:   {idle: [35, 65, 165],  pressed: [65, 99, 208]},
+	red:    {idle: [148, 45, 45],  pressed: [208, 65, 65]},
+	yellow: {idle: [165, 165, 35], pressed: [208, 208, 65]}
 };
 
 

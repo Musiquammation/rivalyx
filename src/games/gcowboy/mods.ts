@@ -1,7 +1,7 @@
 import { Block } from "./Block";
 import { GameMap } from "./GameMap";
 import { Mod } from "./Mod";
-import { newPowerUp as createPowerUp, PowerUpEntity } from "./PowerUp";
+import { createPowerUp, PowerType, PowerUpEntity } from "./PowerUp";
 
 export namespace mods {
 export class Size extends Mod {
@@ -58,6 +58,9 @@ export class PowerupSpawner extends Mod {
     }
 
     override runFrame(map: GameMap, block: Block, speed: number) {
+        if (!map.isServer)
+            return;
+
         this.couldown -= speed;
         if (this.couldown > 0)
             return;

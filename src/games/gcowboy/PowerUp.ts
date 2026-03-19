@@ -2,6 +2,9 @@ import { DataReader } from "../../net/DataReader";
 import { DataWriter } from "../../net/DataWriter";
 import { Block } from "./Block";
 import { Entity, EntityBehavior } from "./Entity";
+import { flags } from "./flags";
+import { Player } from "./Player";
+import { Projectile, ProjectileType } from "./Projectile";
 
 export enum PowerType {
 	DEFAULT,
@@ -20,14 +23,17 @@ const POWER_STATS = [
 ];
 
 
-export function newPowerUp(x: number, y: number, type: PowerType) {
+export function createPowerUp(x: number, y: number, type: PowerType) {
 	return new PowerUpEntity(x, y, POWER_STATS[type].vx, POWER_STATS[type].vy, type);
 }
 
 export class PowerUpEntity extends Entity {
 	static readonly WIDTH = 32;
 	static readonly HEIGHT = 32;
-	static readonly TYPES_COUNT = 5;
+
+
+	/// TODO: set this value to 5
+	static readonly TYPES_COUNT = 3;
 
 	type: PowerType;
 
@@ -74,11 +80,27 @@ type powerUp_t = powerups.Default |
 
 
 export namespace powerups {
-	export class Default {}
-	export class Fire {}
-	export class Ice {}
-	export class Shell {}
-	export class Jumper {}
+	export class Default {
+
+	}
+
+	export class Fire {
+		static readonly LIMIT = 2;
+		static readonly SPEED = 0.4;
+	}
+	
+	export class Ice {
+		static readonly LIMIT = 4;
+		static readonly SPEED = 0.3;
+	}
+
+	export class Shell {
+
+	}
+
+	export class Jumper {
+
+	}
 
 
 	export function send(writer: DataWriter, powerup: powerUp_t) {
@@ -128,6 +150,95 @@ export namespace powerups {
 			return PowerType.JUMPER;
 	
 		return PowerType.DEFAULT;
+	}
+
+	export function start(power: powerUp_t, player: Player) {
+		if (power instanceof Default) {
+			return;
+		}
+
+		if (power instanceof Fire) {
+			if (player.projectiles.length < Fire.LIMIT) {
+				const dir = (player.flags & flags.LOOK_LEFT) ? -1 : 1;
+				player.projectiles.push(new Projectile(
+					player.x + dir * Player.WIDTH/2,
+					player.y,
+					dir * Fire.SPEED,
+					-Projectile.JUMP,
+					ProjectileType.FIRE
+				));
+			}
+			return;
+		}
+
+		if (power instanceof Ice) {
+			if (player.projectiles.length < Ice.LIMIT) {
+				const dir = (player.flags & flags.LOOK_LEFT) ? -1 : 1;
+				player.projectiles.push(new Projectile(
+					player.x + dir * Player.WIDTH/2,
+					player.y,
+					dir * Ice.SPEED,
+					-Projectile.JUMP,
+					ProjectileType.ICE
+				));
+			}
+			return;
+		}
+
+		if (power instanceof Shell) {
+			return;
+		}
+
+		if (power instanceof Jumper) {
+			return;
+		}
+	}
+
+	export function use(power: powerUp_t, player: Player) {
+		if (power instanceof Default) {
+			return;
+		}
+
+		if (power instanceof Fire) {
+			return;
+		}
+
+		if (power instanceof Ice) {
+			return;
+		}
+
+		if (power instanceof Shell) {
+			return;
+		}
+
+		if (power instanceof Jumper) {
+			return;
+		}
+	}
+
+	export function stop(power: powerUp_t, player: Player) {
+		if (power instanceof Default) {
+			return;
+		}
+
+		if (power instanceof Fire) {
+			return;
+		}
+
+		if (power instanceof Ice) {
+			return;
+		}
+
+		if (power instanceof Shell) {
+			return;
+		}
+
+		if (power instanceof Jumper) {
+			return;
+		}
+	}
+
+	export function projectile(power: powerUp_t, player: Player) {
 	}
 }
 
