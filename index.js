@@ -2006,7 +2006,7 @@
       return;
     }
     ctx.save();
-    ctx.strokeStyle = "white";
+    ctx.strokeStyle = block.getHit() ? "yellow" : "white";
     ctx.lineWidth = 10;
     ctx.strokeRect(block.x, block.y, size.w, size.h);
     ctx.restore();
@@ -2172,9 +2172,11 @@
         50
       );
       const player = snapshot.map.players[playerIndex];
+      const starsCount = player.stars.toString().padStart(2, "0");
+      const starsToWinCount = snapshot.starsToWin.toString().padStart(2, "0");
       ctx.fillStyle = "yellow";
       ctx.font = "32px monospace";
-      ctx.fillText(`${player.stars.toString().padStart(2, "0")}/10`, 70, 45);
+      ctx.fillText(`${starsCount}/${starsToWinCount}`, 70, 45);
       let powerupImg;
       if (player.powerup instanceof powerups.Default) {
         powerupImg = POWERUP_TEXTURES[0];
