@@ -1,8 +1,8 @@
 import { ClientInterface } from "../../client/ClientInterface";
 import { ClientGameEngine} from "../../client/ClientGameEngine"
 import { ImageLoader } from "../../client/ImageLoader"
-import { cowboy_game } from "./cowboy_game";
-import { gcowboy } from "./cowboy_commons";
+import { gstars_game } from "./gstars_game";
+import { gcowboy } from "./gstars_common";
 import { Joystick, JOYSTICK_COLORS, JoystickPlacement } from "../../client/Joystick";
 import { DataWriter } from "../../net/DataWriter";
 import { drawBlock } from "./drawBlock";
@@ -10,7 +10,7 @@ import { Player } from "./Player";
 import { flags } from "./flags";
 import { Button, BUTTON_COLORS, ButtonPlacement } from "../../client/Button";
 import { Star } from "./Star";
-import { PowerUpEntity } from "./PowerUp";
+import { PowerUpEntity, powerups } from "./PowerUp";
 import { Projectile, ProjectileType } from "./Projectile";
 
 
@@ -32,20 +32,24 @@ class Memory {
 
 
 const POWERUP_TEXTURES = [
-	"powerup-default",
-	"powerup-fire",
-	"powerup-ice",
-	"powerup-shell",
-	"powerup-jump",
+	"defaultPowerup",
+	"flowerFire",
+	"flowerIce",
+	"shell",
+	"jump",
 ]
 
-export const cowboy_client: ClientInterface<Snapshot, Memory> = {
-	game: cowboy_game,
-	name: "Cowboy",
+export const gstars_client: ClientInterface<Snapshot, Memory> = {
+	game: gstars_game,
+	name: "Stars",
 
 	images: {
-		playerRed: "assets/gpackice/player-red.svg",
-		playerBlue: "assets/gpackice/player-blue.svg",
+		playerRed: "assets/gstars/player-red.svg",
+		playerBlue: "assets/gstars/player-blue.svg",
+		star: "assets/gstars/star.svg",
+		flowerFire: "assets/gstars/flower-fire.svg",
+		flowerIce: "assets/gstars/flower-ice.svg",
+		defaultPowerup: "assets/gstars/defaultPowerup.svg",
 	},
 
 	gameSize: {width: 1600, height: 900},
@@ -59,8 +63,8 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 			[
 				{key: 'KeyD', r: 1, a: 0},
 				{key: 'KeyA', r: 1, a: Math.PI},
-				{key: 'KeyW', r: 1, a: Math.PI * 5.5},
-				{key: 'KeyS', r: 1, a: Math.PI * 0.5},
+				{key: 'KeyW', r: 1, a: Math.PI * 3/2},
+				{key: 'KeyS', r: 1, a: Math.PI * 1/2},
 			]
 		));
 
@@ -101,6 +105,7 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 			ctx.fillStyle = "rgb(25, 39, 98)";
 		}
 		ctx.fillRect(0, 0, screenWidth, screenHeight);
+
 
 
 		// Apply to screen
@@ -146,7 +151,7 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 			ctx.save();
 			ctx.translate(powerup.x, powerup.y);
 
-			const path = POWERUP_TEXTURES[powerup.type]
+			const path = POWERUP_TEXTURES[powerup.type];
 			ctx.drawImage(
 				imageLoader.getImage(path),
 				-PowerUpEntity.WIDTH/2, -PowerUpEntity.HEIGHT/2,
@@ -203,6 +208,37 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 
 		// Cancel screen apply
 		ctx.restore();
+
+
+		// Draw star count
+		ctx.drawImage(
+			imageLoader.getImage("star"),
+			10, 10, 50, 50
+		);
+
+		const player = snapshot.map.players[playerIndex];
+		
+		ctx.fillStyle = "yellow";
+		ctx.font = "32px monospace";
+		ctx.fillText(`${player.stars
+			.toString().padStart(2, '0')}/10`, 70, 45);
+
+		// Draw current powerup
+		let powerupImg;
+		if (player.powerup instanceof powerups.Default) {
+			powerupImg = POWERUP_TEXTURES[0];
+		} else if (player.powerup instanceof powerups.Fire) {
+			powerupImg = POWERUP_TEXTURES[1];
+		} else if (player.powerup instanceof powerups.Ice) {
+			powerupImg = POWERUP_TEXTURES[2];
+		} else {
+			powerupImg = "";
+		}
+
+		ctx.drawImage(
+			imageLoader.getImage(powerupImg),
+			10, 70, 50, 50
+		);
 	},
 
 	clientFrame(
@@ -223,6 +259,7 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 		if (!dir) {
 			dir = {x: 0, y: 0};
 		}
+		console.log(dir.x, dir.y);
 		
 		let flag = memory.sentFlag & flags.WAS_JUMPING & flags.WAS_POWER;
 

@@ -3,7 +3,7 @@ import { DataReader } from "../../net/DataReader";
 import { DataWriter } from "../../net/DataWriter";
 import { ServerGameEngine } from "../../server/ServerGameEngine";
 import { GameInterface } from "../../GameInterface";
-import { gcowboy } from "./cowboy_commons";
+import { gcowboy } from "./gstars_common";
 import { Star } from "./Star";
 import { checkPlayerCollisions, Player } from "./Player";
 import { PowerUpEntity, powerups } from "./PowerUp";
@@ -14,7 +14,7 @@ type Snapshot = InstanceType<typeof gcowboy.Snapshot>;
 
 
 
-export const cowboy_game: GameInterface<Snapshot> = {
+export const gstars_game: GameInterface<Snapshot> = {
 	playerCount: Snapshot.PLAYER_COUNT,
 
 	createSnapshot(isServer: boolean) {

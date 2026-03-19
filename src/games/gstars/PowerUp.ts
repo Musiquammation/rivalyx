@@ -72,7 +72,7 @@ export class PowerUpEntity extends Entity {
 
 
 
-type powerUp_t = powerups.Default |
+export type powerUp_t = powerups.Default |
 	powerups.Fire |
 	powerups.Ice |
 	powerups.Shell |

@@ -1,0 +1,22 @@
+<svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Carré arrondi (bordure uniquement, bien contenu) -->
+  <rect
+    x="1"
+    y="1"
+    width="98"
+    height="98"
+    rx="15"
+    ry="15"
+    fill="none"
+    stroke="gold"
+    stroke-width="2"
+  />
+
+  <!-- Étoile -->
+  <polygon
+    points="50,5 61,38 95,38 67,59 78,91 50,70 22,91 33,59 5,38 39,38"
+    fill="yellow"
+    stroke="gold"
+    stroke-width="2"
+  />
+</svg>

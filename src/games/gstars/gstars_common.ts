@@ -39,6 +39,8 @@ class Snapshot {
 	produceLeaderboard() {
 		if (!this.servData)
 			return;
+
+		
 		
 	}
 

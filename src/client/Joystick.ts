@@ -85,26 +85,47 @@ export class Joystick {
 		for (const p of this.pressedKeys) {
 			for (const k of this.keys) {
 				if (k.key === p) {
+					let dx = Math.cos(k.a);
+					let dy = Math.sin(k.a);
+					
+					// Snap to -1, 0, or 1 if close enough
+					if (Math.abs(dx - (-1)) < 0.0001) dx = -1;
+					else if (Math.abs(dx) < 0.0001) dx = 0;
+					else if (Math.abs(dx - 1) < 0.0001) dx = 1;
+					
+					if (Math.abs(dy - (-1)) < 0.0001) dy = -1;
+					else if (Math.abs(dy) < 0.0001) dy = 0;
+					else if (Math.abs(dy - 1) < 0.0001) dy = 1;
+
+
 					r += k.r;
-					x += k.r * Math.cos(k.a);
-					y += k.r * Math.sin(k.a);
+					x += k.r * dx;
+					y += k.r * dy;
 					n++;
 				}
 			}
 		}
 
+		if (n === 0) {
+			return {x: this.stickX, y: this.stickY};
+		}
+
+		if (x === 0 && y === 0) {
+			return {x: 0, y: 0};
+		}
+
+		
 		// Take average values
 		n = 1/n;
 		x *= n;
 		y *= n;
 		r *= n;
 
-
 		const factor = r / Math.sqrt(x*x + y*y);
 		x *= factor;
 		y *= factor;
 		
-		return {x, y};
 
+		return {x, y};
 	}
 }

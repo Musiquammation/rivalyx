@@ -1,7 +1,7 @@
 import { Block } from "./Block";
 import { Entity, EntityBehavior } from "./Entity";
 import { GameMap } from "./GameMap";
-import { powerups } from "./PowerUp";
+import { powerUp_t, powerups } from "./PowerUp";
 import { Projectile } from "./Projectile";
 import { Star } from "./Star";
 import { collision } from "./collision";
@@ -40,7 +40,7 @@ export class Player extends Entity {
 	stars = 0;
 	mustReleaseStar: {x: number, y: number} | null = null;
 	immuneCouldown = Player.IMMUNE_COULDOWN;
-	powerup = new powerups.Default();
+	powerup: powerUp_t = new powerups.Default();
 	projectiles: Projectile[] = [];
 	freezeCouldown = 0;
 

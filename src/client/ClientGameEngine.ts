@@ -378,7 +378,7 @@ export class ClientGameEngine {
 	}
 
 
-	handleKeydown(code: string) {
+	handleKeypress(code: string) {
 		// Handle buttons
 		for (const button of this.buttons) {
 			if (button.keys.indexOf(code) < 0)

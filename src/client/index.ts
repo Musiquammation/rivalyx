@@ -651,9 +651,9 @@ document.addEventListener("touchcancel", e => {
 }, {passive: false});
 
 
-document.addEventListener("keydown", e => {
+document.addEventListener("keypress", e => {
 	if (globalGameEngine) {
-		globalGameEngine.handleKeydown(e.code);
+		globalGameEngine.handleKeypress(e.code);
 	}
 });
 
