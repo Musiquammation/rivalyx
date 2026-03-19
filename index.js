@@ -1,6 +1,6 @@
 (function() {
   "use strict";
-  var _a;
+  var _a, _b, _c;
   class DataReader {
     constructor(buffer) {
       this.offset = 0;
@@ -238,6 +238,40 @@
   function getTimestamp() {
     return Date.now() >>> 0;
   }
+  var ButtonPlacement = /* @__PURE__ */ ((ButtonPlacement2) => {
+    ButtonPlacement2[ButtonPlacement2["CENTERED"] = 0] = "CENTERED";
+    ButtonPlacement2[ButtonPlacement2["SCREEN_RATIO"] = 1] = "SCREEN_RATIO";
+    ButtonPlacement2[ButtonPlacement2["GAME_RATIO"] = 2] = "GAME_RATIO";
+    return ButtonPlacement2;
+  })(ButtonPlacement || {});
+  const BUTTON_COLORS = {
+    blue: { idle: [35, 65, 165], pressed: [65, 99, 208] },
+    red: { idle: [148, 45, 45], pressed: [208, 65, 65] },
+    yellow: { idle: [165, 165, 35], pressed: [208, 208, 65] }
+  };
+  const _Button = class _Button {
+    constructor(x, y, xpl, ypl, color, label, widthRatio, heightRatio, keys = []) {
+      this.activeTouchId = null;
+      this.pressedKeys = [];
+      this.x = x;
+      this.y = y;
+      this.xpl = xpl;
+      this.ypl = ypl;
+      this.widthRatio = widthRatio;
+      this.heightRatio = heightRatio;
+      this.label = label;
+      this.color = color;
+      this.width = 0;
+      this.height = 0;
+      this.keys = keys;
+    }
+    updateRatio(screenArea) {
+      this.width = screenArea * this.widthRatio * _Button.FACTOR;
+      this.height = screenArea * this.heightRatio * _Button.FACTOR;
+    }
+  };
+  _Button.FACTOR = 0.05;
+  let Button = _Button;
   var JoystickPlacement = /* @__PURE__ */ ((JoystickPlacement2) => {
     JoystickPlacement2[JoystickPlacement2["CENTERED"] = 0] = "CENTERED";
     JoystickPlacement2[JoystickPlacement2["SCREEN_RATIO"] = 1] = "SCREEN_RATIO";
@@ -249,8 +283,9 @@
     red: { base: [148, 45, 45], stick: [208, 65, 65] }
   };
   const _Joystick = class _Joystick {
-    constructor(x, y, xpl, ypl, color, label, radiusRatio = 1) {
+    constructor(x, y, xpl, ypl, color, label, radiusRatio = 1, keys = []) {
       this.radius = 32;
+      this.pressedKeys = [];
       this.x = x;
       this.y = y;
       this.xpl = xpl;
@@ -263,9 +298,51 @@
       this.stickY = 0;
       this.originX = void 0;
       this.originY = void 0;
+      this.keys = keys;
     }
     updateRatio(screenArea) {
       this.radius = screenArea * this.radiusRatio * _Joystick.FACTOR;
+    }
+    getStick() {
+      if (this.pressedKeys.length === 0) {
+        return { x: this.stickX, y: this.stickY };
+      }
+      let x = 0;
+      let y = 0;
+      let r = 0;
+      let n = 0;
+      for (const p of this.pressedKeys) {
+        for (const k of this.keys) {
+          if (k.key === p) {
+            let dx = Math.cos(k.a);
+            let dy = Math.sin(k.a);
+            if (Math.abs(dx - -1) < 1e-4) dx = -1;
+            else if (Math.abs(dx) < 1e-4) dx = 0;
+            else if (Math.abs(dx - 1) < 1e-4) dx = 1;
+            if (Math.abs(dy - -1) < 1e-4) dy = -1;
+            else if (Math.abs(dy) < 1e-4) dy = 0;
+            else if (Math.abs(dy - 1) < 1e-4) dy = 1;
+            r += k.r;
+            x += k.r * dx;
+            y += k.r * dy;
+            n++;
+          }
+        }
+      }
+      if (n === 0) {
+        return { x: this.stickX, y: this.stickY };
+      }
+      if (x === 0 && y === 0) {
+        return { x: 0, y: 0 };
+      }
+      n = 1 / n;
+      x *= n;
+      y *= n;
+      r *= n;
+      const factor = r / Math.sqrt(x * x + y * y);
+      x *= factor;
+      y *= factor;
+      return { x, y };
     }
   };
   _Joystick.FACTOR = 0.05;
@@ -384,10 +461,7 @@
     simulateInputs(startDate, inputs) {
       if (inputs.length === 0) {
         const date = getTimestamp();
-        this.object.game.frame(
-          this.snapshot,
-          date - startDate
-        );
+        this.runFrame(date - startDate);
       } else {
         const lengthLimit = inputs.length - 1;
         this.runFrame(Math.max(inputs[0].date - startDate, 0));
@@ -474,23 +548,38 @@
           continue;
         }
         if (kind === "touchstart") {
-          let closestJoystick = null;
-          let minDistance = Infinity;
-          for (const joystick of this.joysticks) {
-            if (joystick.activeTouchId !== void 0) continue;
-            const pos = this.getJoystickPosition(joystick, screenWidth, screenHeight, canvasWidth, canvasHeight);
-            const distance = Math.sqrt(Math.pow(clientX - pos.x, 2) + Math.pow(clientY - pos.y, 2));
-            if (distance < minDistance) {
-              minDistance = distance;
-              closestJoystick = joystick;
+          let notFound = true;
+          for (const button of this.buttons) {
+            if (button.activeTouchId !== null)
+              continue;
+            const pos = this.getButtonPosition(button, screenWidth, screenHeight, canvasWidth, canvasHeight);
+            const halfWidth = button.width / 2;
+            const halfHeight = button.height / 2;
+            if (clientX >= pos.x - halfWidth && clientX <= pos.x + halfWidth && clientY >= pos.y - halfHeight && clientY <= pos.y + halfHeight) {
+              button.activeTouchId = touchId;
+              notFound = false;
+              break;
             }
           }
-          if (closestJoystick) {
-            closestJoystick.activeTouchId = touchId;
-            closestJoystick.originX = clientX;
-            closestJoystick.originY = clientY;
-            closestJoystick.stickX = 0;
-            closestJoystick.stickY = 0;
+          if (notFound) {
+            let closestJoystick = null;
+            let minDistance = Infinity;
+            for (const joystick of this.joysticks) {
+              if (joystick.activeTouchId !== void 0) continue;
+              const pos = this.getJoystickPosition(joystick, screenWidth, screenHeight, canvasWidth, canvasHeight);
+              const distance = Math.sqrt(Math.pow(clientX - pos.x, 2) + Math.pow(clientY - pos.y, 2));
+              if (distance < minDistance) {
+                minDistance = distance;
+                closestJoystick = joystick;
+              }
+            }
+            if (closestJoystick) {
+              closestJoystick.activeTouchId = touchId;
+              closestJoystick.originX = clientX;
+              closestJoystick.originY = clientY;
+              closestJoystick.stickX = 0;
+              closestJoystick.stickY = 0;
+            }
           }
         } else if (kind === "touchmove") {
           for (const joystick of this.joysticks) {
@@ -500,16 +589,62 @@
             }
           }
         } else if (kind === "touchend" || kind === "touchcancel") {
-          for (const joystick of this.joysticks) {
-            if (joystick.activeTouchId === touchId) {
-              joystick.activeTouchId = void 0;
-              joystick.stickX = 0;
-              joystick.stickY = 0;
-              joystick.originX = void 0;
-              joystick.originY = void 0;
+          let found = false;
+          for (const button of this.buttons) {
+            if (button.activeTouchId === touchId) {
+              button.activeTouchId = null;
+              found = true;
               break;
             }
           }
+          if (!found) {
+            for (const joystick of this.joysticks) {
+              if (joystick.activeTouchId === touchId) {
+                joystick.activeTouchId = void 0;
+                joystick.stickX = 0;
+                joystick.stickY = 0;
+                joystick.originX = void 0;
+                joystick.originY = void 0;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+    handleKeypress(code) {
+      for (const button of this.buttons) {
+        if (button.keys.indexOf(code) < 0)
+          continue;
+        if (button.pressedKeys.indexOf(code) >= 0)
+          continue;
+        button.pressedKeys.push(code);
+      }
+      for (const joystick of this.joysticks) {
+        for (const key of joystick.keys) {
+          if (key.key !== code)
+            continue;
+          if (joystick.pressedKeys.indexOf(code) >= 0)
+            continue;
+          joystick.pressedKeys.push(code);
+        }
+      }
+    }
+    handleKeyup(code) {
+      for (const button of this.buttons) {
+        if (button.keys.indexOf(code) < 0)
+          continue;
+        if (button.pressedKeys.indexOf(code) < 0)
+          continue;
+        button.pressedKeys = button.pressedKeys.filter((x) => x !== code);
+      }
+      for (const joystick of this.joysticks) {
+        for (const key of joystick.keys) {
+          if (key.key !== code)
+            continue;
+          if (joystick.pressedKeys.indexOf(code) < 0)
+            continue;
+          joystick.pressedKeys = joystick.pressedKeys.filter((x) => x !== code);
         }
       }
     }
@@ -544,7 +679,12 @@
     getJoyStickDirection(label) {
       const joystick = Array.from(this.joysticks).find((j) => j.label === label);
       if (!joystick) return null;
-      return { x: joystick.stickX, y: joystick.stickY };
+      return joystick.getStick();
+    }
+    getButton(label) {
+      const button = Array.from(this.buttons).find((j) => j.label === label);
+      if (!button) return false;
+      return button.pressedKeys.length || button.activeTouchId !== null;
     }
     getJoystickPosition(joystick, screenWidth, screenHeight, canvasWidth, canvasHeight) {
       if (joystick.originX !== void 0 && joystick.originY !== void 0) {
@@ -580,6 +720,37 @@
       }
       return { x, y };
     }
+    getButtonPosition(button, screenWidth, screenHeight, canvasWidth, canvasHeight) {
+      let x;
+      let y;
+      switch (button.xpl) {
+        case ButtonPlacement.CENTERED:
+          x = screenWidth / 2 + button.x;
+          break;
+        case ButtonPlacement.SCREEN_RATIO:
+          x = screenWidth * button.x;
+          break;
+        case ButtonPlacement.GAME_RATIO:
+          x = canvasWidth * button.x;
+          break;
+        default:
+          x = button.x;
+      }
+      switch (button.ypl) {
+        case ButtonPlacement.CENTERED:
+          y = screenHeight / 2 + button.y;
+          break;
+        case ButtonPlacement.SCREEN_RATIO:
+          y = screenHeight * button.y;
+          break;
+        case ButtonPlacement.GAME_RATIO:
+          y = canvasHeight * button.y;
+          break;
+        default:
+          y = button.y;
+      }
+      return { x, y };
+    }
     drawJoysticks(ctx, screenArea) {
       if (!this.canvas) return;
       const screenWidth = window.innerWidth;
@@ -590,8 +761,7 @@
         joystick.updateRatio(screenArea);
         const pos = this.getJoystickPosition(joystick, screenWidth, screenHeight, canvasWidth, canvasHeight);
         const radius = joystick.radius;
-        const stickX = joystick.stickX;
-        const stickY = joystick.stickY;
+        const stick = joystick.getStick();
         ctx.fillStyle = `rgba(${joystick.color.base[0]}, ${joystick.color.base[1]}, ${joystick.color.base[2]}, 0.5)`;
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
@@ -599,14 +769,56 @@
         const stickRadius = radius * 0.4;
         ctx.fillStyle = `rgba(${joystick.color.stick[0]}, ${joystick.color.stick[1]}, ${joystick.color.stick[2]}, 0.8)`;
         ctx.beginPath();
-        ctx.arc(pos.x + stickX * radius * 0.6, pos.y + stickY * radius * 0.6, stickRadius, 0, Math.PI * 2);
+        ctx.arc(
+          pos.x + stick.x * radius * 0.6,
+          pos.y + stick.y * radius * 0.6,
+          stickRadius,
+          0,
+          Math.PI * 2
+        );
         ctx.fill();
       }
     }
+    drawButtons(ctx, screenArea) {
+      if (!this.canvas) return;
+      const screenWidth = window.innerWidth;
+      const screenHeight = window.innerHeight;
+      const canvasWidth = this.canvas.width;
+      const canvasHeight = this.canvas.height;
+      for (const button of this.buttons) {
+        button.updateRatio(screenArea);
+        const pos = this.getButtonPosition(button, screenWidth, screenHeight, canvasWidth, canvasHeight);
+        const width = button.width;
+        const height = button.height;
+        const color = button.activeTouchId === null && button.pressedKeys.length === 0 ? button.color.idle : button.color.pressed;
+        ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.5)`;
+        ctx.fillRect(pos.x - width / 2, pos.y - height / 2, width, height);
+        ctx.strokeStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 1.0)`;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(pos.x - width / 2, pos.y - height / 2, width, height);
+      }
+    }
   }
-  class ImageLoader {
+  const _ImageLoader = class _ImageLoader {
     constructor() {
       this.images = /* @__PURE__ */ new Map();
+    }
+    static createMissingTexture() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 2;
+      canvas.height = 2;
+      const ctx = canvas.getContext("2d");
+      ctx.imageSmoothingEnabled = false;
+      const half = 1;
+      const pink = "#ff00ff";
+      const black = "#000000";
+      ctx.fillStyle = pink;
+      ctx.fillRect(0, 0, half, half);
+      ctx.fillRect(half, half, half, half);
+      ctx.fillStyle = black;
+      ctx.fillRect(half, 0, half, half);
+      ctx.fillRect(0, half, half, half);
+      return canvas;
     }
     async loadImages(images) {
       const promises = Object.entries(images).map(([name, url]) => {
@@ -626,69 +838,1035 @@
       const img = this.images.get(key);
       if (img)
         return img;
-      throw new Error("Failed to get image");
+      return _ImageLoader.MISSING_TEXTURE;
     }
-  }
-  let Player$2 = class Player {
-    constructor(x, y) {
-      this.alive = true;
+  };
+  _ImageLoader.MISSING_TEXTURE = _ImageLoader.createMissingTexture();
+  let ImageLoader = _ImageLoader;
+  const _Block = class _Block {
+    constructor(x, y, mods2) {
       this.x = x;
       this.y = y;
+      this.mods = mods2;
+      this.containsFrameToRun = false;
+      for (let m of mods2) {
+        if (m.hasFrameToRun()) {
+          this.containsFrameToRun = true;
+          break;
+        }
+      }
+    }
+    getSize() {
+      for (let m of this.mods) {
+        const s = m.getSize();
+        if (s) {
+          return s;
+        }
+      }
+      return null;
+    }
+    getCollision() {
+      for (let m of this.mods) {
+        const s = m.getCollision();
+        if (s) {
+          return s;
+        }
+      }
+      return _Block.DEFAULT_COLLISION;
+    }
+    getStarSpawn() {
+      let s = 0;
+      for (let m of this.mods) {
+        s = Math.max(s, m.getStarSpawn());
+      }
+      return s;
+    }
+    getHit() {
+      for (let m of this.mods)
+        if (m.getHit())
+          return true;
+      return false;
+    }
+    runFrame(map, speed) {
+      if (!this.containsFrameToRun)
+        return;
+      for (let m of this.mods)
+        m.runFrame(map, this, speed);
+    }
+    onTouch(player) {
     }
   };
+  _Block.DEFAULT_COLLISION = {
+    right: true,
+    up: true,
+    left: true,
+    down: true
+  };
+  let Block = _Block;
+  var collision;
+  ((collision2) => {
+    function rect_rect(x1, y1, w1, h1, x2, y2, w2, h2) {
+      return !(x1 + w1 <= x2 || x1 >= x2 + w2 || y1 + h1 <= y2 || y1 >= y2 + h2);
+    }
+    collision2.rect_rect = rect_rect;
+    function rect_centeredRect(rx, ry, rw, rh, cx, cy, cw, ch) {
+      const halfW = cw * 0.5;
+      const halfH = ch * 0.5;
+      const x2 = cx - halfW;
+      const y2 = cy - halfH;
+      return rect_rect(
+        rx,
+        ry,
+        rw,
+        rh,
+        x2,
+        y2,
+        cw,
+        ch
+      );
+    }
+    collision2.rect_centeredRect = rect_centeredRect;
+    function centeredRect_centeredRect(cx1, cy1, cw1, ch1, cx2, cy2, cw2, ch2) {
+      const halfW1 = cw1 * 0.5;
+      const halfH1 = ch1 * 0.5;
+      const halfW2 = cw2 * 0.5;
+      const halfH2 = ch2 * 0.5;
+      return rect_rect(
+        cx1 - halfW1,
+        cy1 - halfH1,
+        cw1,
+        ch1,
+        cx2 - halfW2,
+        cy2 - halfH2,
+        cw2,
+        ch2
+      );
+    }
+    collision2.centeredRect_centeredRect = centeredRect_centeredRect;
+  })(collision || (collision = {}));
+  const _Mod = class _Mod {
+    getSize() {
+      return null;
+    }
+    getCollision() {
+      return null;
+    }
+    getStarSpawn() {
+      return 0;
+    }
+    getHit() {
+      return false;
+    }
+    getKill() {
+      return false;
+    }
+    hasFrameToRun() {
+      return false;
+    }
+    runFrame(map, block, speed) {
+    }
+  };
+  _Mod.NO_COLL = {
+    right: false,
+    up: false,
+    left: false,
+    down: false
+  };
+  let Mod = _Mod;
+  var EntityBehavior = /* @__PURE__ */ ((EntityBehavior2) => {
+    EntityBehavior2[EntityBehavior2["NONE"] = 0] = "NONE";
+    EntityBehavior2[EntityBehavior2["JUMP_FLOOR"] = 1] = "JUMP_FLOOR";
+    EntityBehavior2[EntityBehavior2["JUMP_CEILING"] = 2] = "JUMP_CEILING";
+    EntityBehavior2[EntityBehavior2["JUMP_LEFT"] = 3] = "JUMP_LEFT";
+    EntityBehavior2[EntityBehavior2["JUMP_RIGHT"] = 4] = "JUMP_RIGHT";
+    EntityBehavior2[EntityBehavior2["IDLE_FLOOR"] = 5] = "IDLE_FLOOR";
+    EntityBehavior2[EntityBehavior2["IDLE_CEILING"] = 6] = "IDLE_CEILING";
+    EntityBehavior2[EntityBehavior2["IDLE_LEFT"] = 7] = "IDLE_LEFT";
+    EntityBehavior2[EntityBehavior2["IDLE_RIGHT"] = 8] = "IDLE_RIGHT";
+    EntityBehavior2[EntityBehavior2["WALK_FLOOR"] = 9] = "WALK_FLOOR";
+    EntityBehavior2[EntityBehavior2["WALK_CEILING"] = 10] = "WALK_CEILING";
+    EntityBehavior2[EntityBehavior2["CLIMB_LEFT"] = 11] = "CLIMB_LEFT";
+    EntityBehavior2[EntityBehavior2["CLIMB_RIGHT"] = 12] = "CLIMB_RIGHT";
+    return EntityBehavior2;
+  })(EntityBehavior || {});
+  class Entity {
+    constructor(x, y, vx, vy) {
+      this.x = x;
+      this.y = y;
+      this.vx = vx;
+      this.vy = vy;
+    }
+    resetJumps() {
+    }
+    onPlatform(behavior, prev_vx, prev_vy, block) {
+    }
+    applyCollisions(map, speed) {
+      const es = this.getSize();
+      const lp = { x: this.x, y: this.y };
+      const prev_vx = this.vx;
+      const prev_vy = this.vy;
+      const np = {
+        x: this.x + this.vx * speed,
+        y: this.y + this.vy * speed
+      };
+      for (const block of map.blocks) {
+        const size = block.getSize();
+        if (!size)
+          continue;
+        const coll = collision.rect_centeredRect(
+          block.x,
+          block.y,
+          size.w,
+          size.h,
+          np.x,
+          np.y,
+          es.w,
+          es.h
+        );
+        if (coll) {
+          block.onTouch(this);
+        }
+      }
+      for (const block of map.blocks) {
+        const size = block.getSize();
+        if (!size)
+          continue;
+        const collObj = block.getCollision();
+        if (!collObj.right && !collObj.up && !collObj.left && !collObj.down) {
+          continue;
+        }
+        if (!collision.rect_centeredRect(
+          block.x,
+          block.y,
+          size.w,
+          size.h,
+          np.x,
+          np.y,
+          es.w,
+          es.h
+        )) {
+          continue;
+        }
+        let behavior = 0;
+        if (collObj.up && lp.y <= block.y - es.h / 2) {
+          np.y = block.y - es.h / 2;
+          this.vy = 0;
+          this.resetJumps();
+          behavior = 5;
+        }
+        if (collObj.down && lp.y >= block.y + size.h + es.h / 2) {
+          np.y = block.y + size.h + es.h / 2;
+          this.vy = 0;
+          behavior = 6;
+        }
+        if (collObj.right && lp.x <= block.x - es.w / 2) {
+          np.x = block.x - es.w / 2;
+          if (this.vy > 0 && this.vx > 0) {
+            this.vy = 0;
+            this.resetJumps();
+            behavior = 11;
+          } else {
+            behavior = 7;
+          }
+          this.vx = 0;
+        }
+        if (collObj.left && lp.x >= block.x + size.w + es.w / 2) {
+          np.x = block.x + size.w + es.w / 2;
+          if (this.vy > 0 && this.vx < 0) {
+            this.vy = 0;
+            this.resetJumps();
+            behavior = 12;
+          } else {
+            behavior = 8;
+          }
+          this.vx = 0;
+        }
+        this.onPlatform(behavior, prev_vx, prev_vy, block);
+        if (!collision.rect_centeredRect(
+          block.x,
+          block.y,
+          size.w,
+          size.h,
+          np.x,
+          np.y,
+          es.w,
+          es.h
+        )) {
+          continue;
+        }
+        console.warn("TODO: entity inside a block");
+      }
+      this.x = np.x;
+      this.y = np.y;
+    }
+    isOutsideBox(box) {
+      const size = this.getSize();
+      return this.x + size.w / 2 < box.left || this.x - size.w / 2 > box.right || this.y + size.h / 2 < box.top || this.y - size.h / 2 > box.bottom;
+    }
+  }
+  var flags;
+  ((flags2) => {
+    flags2.DIVE = 1;
+    flags2.LOOK_LEFT = 2;
+    flags2.JUMP = 4;
+    flags2.WAS_JUMPING = 8;
+    flags2.STAR_ADD = 16;
+    flags2.STAR_REM = 32;
+    flags2.POWER = 64;
+    flags2.WAS_POWER = 128;
+  })(flags || (flags = {}));
+  const _Star = class _Star extends Entity {
+    constructor(x, y, vx, vy, deadtime) {
+      super(x, y, vx, vy);
+      this.deadtime = deadtime;
+    }
+    getSize() {
+      return { w: _Star.WIDTH, h: _Star.HEIGHT };
+    }
+    onPlatform(behavior, prev_vx, prev_vy, block) {
+      switch (behavior) {
+        case EntityBehavior.IDLE_FLOOR: {
+          const r = _Star.RAND_JUMP_MIN + Math.random() * (_Star.RAND_JUMP_MAX - _Star.RAND_JUMP_MIN);
+          this.vy = -_Star.JUMP * r;
+          break;
+        }
+        case EntityBehavior.IDLE_LEFT:
+        case EntityBehavior.IDLE_RIGHT:
+        case EntityBehavior.CLIMB_LEFT:
+        case EntityBehavior.CLIMB_RIGHT:
+          this.vx = -prev_vx;
+          break;
+      }
+    }
+  };
+  _Star.JUMP = 0.7;
+  _Star.SPEED = 0.2;
+  _Star.GRAVITY = 1 / 1e3;
+  _Star.WIDTH = 64;
+  _Star.HEIGHT = 64;
+  _Star.RAND_JUMP_MIN = 0.7;
+  _Star.RAND_JUMP_MAX = 1.3;
+  _Star.DEADTIME = 1e3;
+  let Star = _Star;
+  let Player$2 = (_a = class extends Entity {
+    constructor(x, y) {
+      super(x, y, 0, 0);
+      this.dirX = 0;
+      this.flags = 0;
+      this.sessionAlive = true;
+      this.respawnCouldown = -1;
+      this.jumps = _a.JUMPS;
+      this.stars = 0;
+      this.mustReleaseStar = null;
+      this.immuneCouldown = _a.IMMUNE_COULDOWN;
+      this.powerup = new powerups.Default();
+      this.projectiles = [];
+      this.freezeCouldown = 0;
+    }
+    runCouldowns(speed) {
+      if (this.freezeCouldown > 0) {
+        this.freezeCouldown -= speed;
+        return false;
+      }
+      if (this.respawnCouldown > 0) {
+        this.respawnCouldown -= speed;
+        if (this.respawnCouldown > 0)
+          return true;
+      }
+      this.immuneCouldown -= speed;
+      return false;
+    }
+    frame(speed) {
+      if (this.dirX > 0) {
+        const maxSpeed = _a.MAX_SPEED * this.dirX;
+        let vx = this.vx;
+        if (vx > maxSpeed) {
+          vx -= _a.SLOW_DOWN * speed;
+          if (vx < maxSpeed) {
+            vx = maxSpeed;
+          }
+        } else {
+          if (vx < 0) {
+            vx += _a.ACC_REVERSE * speed;
+          } else {
+            vx += _a.ACCELERATION * speed;
+          }
+          if (vx > maxSpeed) {
+            vx = maxSpeed;
+          }
+        }
+        this.vx = vx;
+      } else if (this.dirX < 0) {
+        const maxSpeed = _a.MAX_SPEED * this.dirX;
+        let vx = this.vx;
+        if (vx < maxSpeed) {
+          vx -= _a.SLOW_DOWN * speed;
+          if (vx < maxSpeed) {
+            vx = maxSpeed;
+          }
+        } else {
+          if (vx > 0) {
+            vx -= _a.ACC_REVERSE * speed;
+          } else {
+            vx -= _a.ACCELERATION * speed;
+          }
+          if (vx < maxSpeed) {
+            vx = maxSpeed;
+          }
+        }
+        this.vx = vx;
+      } else {
+        if (this.vx > 0) {
+          this.vx -= _a.DECELERATION * speed;
+          if (this.vx < 0) {
+            this.vx = 0;
+          }
+        } else if (this.vx < 0) {
+          this.vx += _a.DECELERATION * speed;
+          if (this.vx > 0) {
+            this.vx = 0;
+          }
+        }
+      }
+      if ((this.flags & flags.JUMP) === 0) {
+        this.flags &= ~flags.WAS_JUMPING;
+      } else if ((this.flags & flags.WAS_JUMPING) === 0) {
+        this.flags |= flags.WAS_JUMPING;
+        if (this.jumps > 0) {
+          this.vy = -_a.JUMP;
+          this.jumps--;
+        }
+      }
+      if ((this.flags & flags.POWER) === 0) {
+        this.flags &= ~flags.WAS_POWER;
+        powerups.stop(this.powerup, this);
+      } else if ((this.flags & flags.WAS_POWER) === 0) {
+        this.flags |= flags.WAS_POWER;
+        powerups.start(this.powerup, this);
+      } else {
+        powerups.use(this.powerup, this);
+      }
+    }
+    releaseStar(map, x, y) {
+      if (this.stars <= 0)
+        return;
+      this.stars--;
+      map.stars.push(new Star(
+        this.x,
+        this.y,
+        this.flags & flags.LOOK_LEFT ? -Star.SPEED : Star.SPEED,
+        -Star.JUMP,
+        Star.DEADTIME
+      ));
+    }
+    hit() {
+      if (this.freezeCouldown > 0)
+        return;
+      if (this.immuneCouldown <= 0) {
+        this.immuneCouldown = _a.IMMUNE_COULDOWN;
+        this.mustReleaseStar = { x: this.x, y: this.y };
+      }
+    }
+    kill() {
+      this.mustReleaseStar = { x: this.x, y: this.y - _a.HEIGHT };
+      this.immuneCouldown = _a.IMMUNE_COULDOWN;
+      this.respawnCouldown = _a.RESPAWN_COULDOWN;
+      this.freezeCouldown = 0;
+      this.x = 0;
+      this.y = 0;
+    }
+    resetJumps() {
+      this.jumps = _a.JUMPS;
+    }
+    onPlatform(behavior, prev_vx, prev_vy, block) {
+      if (block.getHit()) {
+        this.hit();
+      }
+    }
+    getSize() {
+      return { w: _a.WIDTH, h: _a.HEIGHT };
+    }
+    onIce(dir) {
+      if (this.freezeCouldown <= 0)
+        this.freezeCouldown = _a.FREEZE_TIME;
+    }
+    onFire() {
+      if (this.freezeCouldown > 0) {
+        this.freezeCouldown = 0;
+        return;
+      }
+      this.hit();
+    }
+  }, _a.WIDTH = 32, _a.HEIGHT = 32, _a.JUMPS = 2, _a.JUMP = 1.2, _a.DOMINATION_BOUNCE = 0.7, _a.DOMINATION_FORCE = 0.6, _a.GRAVITY = 2.4 / 1e3, _a.MAX_SPEED = 1.5, _a.ACCELERATION = 6, _a.DECELERATION = 7, _a.ACC_REVERSE = 13, _a.SLOW_DOWN = 1.5, _a.DASH = 3, _a.RESPAWN_COULDOWN = 3 * 1e3, _a.IMMUNE_COULDOWN = 1 * 1e3, _a.FREEZE_TIME = 1.5 * 1e3, _a);
+  function checkPlayerCollisions(entity, players) {
+    const size = entity.getSize();
+    let touched = null;
+    for (const player of players) {
+      if (player.respawnCouldown > 0)
+        continue;
+      if (!collision.centeredRect_centeredRect(
+        entity.x,
+        entity.y,
+        size.w,
+        size.h,
+        player.x,
+        player.y,
+        Player$2.WIDTH,
+        Player$2.HEIGHT
+      )) {
+        continue;
+      }
+      if (touched !== null) {
+        return null;
+      }
+      touched = player;
+    }
+    return touched;
+  }
+  var ProjectileType = /* @__PURE__ */ ((ProjectileType2) => {
+    ProjectileType2[ProjectileType2["ICE"] = 0] = "ICE";
+    ProjectileType2[ProjectileType2["FIRE"] = 1] = "FIRE";
+    return ProjectileType2;
+  })(ProjectileType || {});
+  const BOUCES = [
+    4,
+    // ice
+    2
+    // fire
+  ];
+  const _Projectile = class _Projectile extends Entity {
+    constructor(x, y, vx, vy, type, bounces = BOUCES[type]) {
+      super(x, y, vx, vy);
+      this.type = type;
+      this.bounces = bounces;
+    }
+    getSize() {
+      return { w: _Projectile.RADIUS, h: _Projectile.RADIUS };
+    }
+    applyOnPlayer(player) {
+      switch (this.type) {
+        case 0:
+          player.onIce(this.vx);
+          break;
+        case 1:
+          player.onFire();
+          break;
+      }
+    }
+    onPlatform(behavior, prev_vx, prev_vy) {
+      switch (behavior) {
+        case EntityBehavior.IDLE_FLOOR: {
+          this.vy = -_Projectile.JUMP;
+          this.bounces--;
+          break;
+        }
+        case EntityBehavior.IDLE_LEFT:
+        case EntityBehavior.IDLE_RIGHT:
+        case EntityBehavior.CLIMB_LEFT:
+        case EntityBehavior.CLIMB_RIGHT:
+          this.vx = -prev_vx;
+          break;
+      }
+    }
+  };
+  _Projectile.RADIUS = 16;
+  _Projectile.JUMP = 0.3;
+  _Projectile.GRAVITY = 1.2 / 1e3;
+  let Projectile = _Projectile;
+  const POWER_STATS = [
+    { vx: 1, vy: 0, jmp: false },
+    // default
+    { vx: 0, vy: 0, jmp: false },
+    // fire
+    { vx: 0, vy: 0, jmp: false },
+    // ice
+    { vx: 0.1, vy: -0.5, jmp: true },
+    // shell
+    { vx: 0.1, vy: -0.5, jmp: true }
+    // jumper
+  ];
+  function createPowerUp(x, y, type) {
+    return new PowerUpEntity(x, y, POWER_STATS[type].vx, POWER_STATS[type].vy, type);
+  }
+  const _PowerUpEntity = class _PowerUpEntity extends Entity {
+    constructor(x, y, vx, vy, type) {
+      super(x, y, vx, vy);
+      this.type = type;
+    }
+    getSize() {
+      return { w: _PowerUpEntity.WIDTH, h: _PowerUpEntity.HEIGHT };
+    }
+    onPlatform(behavior, prev_vx, prev_vy, block) {
+      switch (behavior) {
+        case EntityBehavior.IDLE_FLOOR:
+          if (POWER_STATS[this.type].jmp)
+            this.vy = -prev_vy;
+          break;
+        case EntityBehavior.IDLE_LEFT:
+        case EntityBehavior.IDLE_RIGHT:
+        case EntityBehavior.CLIMB_LEFT:
+        case EntityBehavior.CLIMB_RIGHT:
+          this.vx = -prev_vx;
+          break;
+      }
+    }
+  };
+  _PowerUpEntity.WIDTH = 32;
+  _PowerUpEntity.HEIGHT = 32;
+  _PowerUpEntity.TYPES_COUNT = 3;
+  let PowerUpEntity = _PowerUpEntity;
+  var powerups;
+  ((powerups2) => {
+    class Default {
+    }
+    powerups2.Default = Default;
+    const _Fire = class _Fire {
+    };
+    _Fire.LIMIT = 2;
+    _Fire.SPEED = 0.4;
+    let Fire = _Fire;
+    powerups2.Fire = Fire;
+    const _Ice = class _Ice {
+    };
+    _Ice.LIMIT = 4;
+    _Ice.SPEED = 0.3;
+    let Ice = _Ice;
+    powerups2.Ice = Ice;
+    class Shell {
+    }
+    powerups2.Shell = Shell;
+    class Jumper {
+    }
+    powerups2.Jumper = Jumper;
+    function send(writer, powerup) {
+      if (powerup instanceof Default) {
+        return;
+      }
+    }
+    powerups2.send = send;
+    function recv(reader, powerup) {
+    }
+    powerups2.recv = recv;
+    function produce(type) {
+      switch (type) {
+        case 0:
+          return new powerups2.Default();
+        case 1:
+          return new powerups2.Fire();
+        case 2:
+          return new powerups2.Ice();
+        case 3:
+          return new powerups2.Shell();
+        case 4:
+          return new powerups2.Jumper();
+      }
+    }
+    powerups2.produce = produce;
+    function getType(powerup) {
+      if (powerup instanceof Default)
+        return 0;
+      if (powerup instanceof Fire)
+        return 1;
+      if (powerup instanceof Ice)
+        return 2;
+      if (powerup instanceof Shell)
+        return 3;
+      if (powerup instanceof Jumper)
+        return 4;
+      return 0;
+    }
+    powerups2.getType = getType;
+    function start(power, player) {
+      if (power instanceof Default) {
+        return;
+      }
+      if (power instanceof Fire) {
+        if (player.projectiles.length < Fire.LIMIT) {
+          const dir = player.flags & flags.LOOK_LEFT ? -1 : 1;
+          player.projectiles.push(new Projectile(
+            player.x + dir * Player$2.WIDTH / 2,
+            player.y,
+            dir * Fire.SPEED,
+            -Projectile.JUMP,
+            ProjectileType.FIRE
+          ));
+        }
+        return;
+      }
+      if (power instanceof Ice) {
+        if (player.projectiles.length < Ice.LIMIT) {
+          const dir = player.flags & flags.LOOK_LEFT ? -1 : 1;
+          player.projectiles.push(new Projectile(
+            player.x + dir * Player$2.WIDTH / 2,
+            player.y,
+            dir * Ice.SPEED,
+            -Projectile.JUMP,
+            ProjectileType.ICE
+          ));
+        }
+        return;
+      }
+      if (power instanceof Shell) {
+        return;
+      }
+      if (power instanceof Jumper) {
+        return;
+      }
+    }
+    powerups2.start = start;
+    function use(power, player) {
+      if (power instanceof Default) {
+        return;
+      }
+      if (power instanceof Fire) {
+        return;
+      }
+      if (power instanceof Ice) {
+        return;
+      }
+      if (power instanceof Shell) {
+        return;
+      }
+      if (power instanceof Jumper) {
+        return;
+      }
+    }
+    powerups2.use = use;
+    function stop(power, player) {
+      if (power instanceof Default) {
+        return;
+      }
+      if (power instanceof Fire) {
+        return;
+      }
+      if (power instanceof Ice) {
+        return;
+      }
+      if (power instanceof Shell) {
+        return;
+      }
+      if (power instanceof Jumper) {
+        return;
+      }
+    }
+    powerups2.stop = stop;
+    function projectile(power, player) {
+    }
+    powerups2.projectile = projectile;
+  })(powerups || (powerups = {}));
+  var mods;
+  ((mods2) => {
+    class Size extends Mod {
+      constructor(w, h) {
+        super();
+        this.w = w;
+        this.h = h;
+      }
+      getSize() {
+        return { w: this.w, h: this.h };
+      }
+    }
+    mods2.Size = Size;
+    class StarSpawner extends Mod {
+      constructor(spawn) {
+        super();
+        this.spawn = spawn;
+      }
+      getStarSpawn() {
+        return this.spawn;
+      }
+      getCollision() {
+        return Mod.NO_COLL;
+      }
+    }
+    mods2.StarSpawner = StarSpawner;
+    class Hit extends Mod {
+      getHit() {
+        return true;
+      }
+    }
+    mods2.Hit = Hit;
+    class PowerupSpawner extends Mod {
+      constructor(frequency) {
+        super();
+        this.couldown = 0;
+        this.frequency = frequency;
+      }
+      hasFrameToRun() {
+        return true;
+      }
+      runFrame(map, block, speed) {
+        if (!map.isServer)
+          return;
+        this.couldown -= speed;
+        if (this.couldown > 0)
+          return;
+        this.couldown += this.frequency;
+        const type = Math.floor(Math.random() * PowerUpEntity.TYPES_COUNT);
+        map.powerups.push(createPowerUp(block.x, block.y, type));
+      }
+    }
+    mods2.PowerupSpawner = PowerupSpawner;
+  })(mods || (mods = {}));
+  const STAR_COULDOWN = 5 * 1e3;
+  class GameMap {
+    constructor(players, isServer) {
+      this.blocks = [];
+      this.stars = [];
+      this.powerups = [];
+      this.gameBox = {
+        left: -16e3,
+        top: -9e3,
+        right: 16e3,
+        bottom: 900
+      };
+      this.starCouldown = STAR_COULDOWN;
+      this.players = players;
+      this.isServer = isServer;
+    }
+    runTest() {
+      this.blocks.push(new Block(-400, 200, [
+        new mods.Size(800, 100)
+      ]));
+      this.blocks.push(new Block(400, -200, [
+        new mods.Size(100, 500)
+      ]));
+      this.blocks.push(new Block(0, 0, [
+        new mods.StarSpawner(1)
+      ]));
+      this.blocks.push(new Block(-400, -200, [
+        new mods.Hit(),
+        new mods.Size(100, 100)
+      ]));
+      this.blocks.push(new Block(-400, -300, [
+        new mods.PowerupSpawner(1e3)
+      ]));
+    }
+    spawnStars(speed) {
+      this.starCouldown -= speed;
+      if (this.starCouldown < 0) {
+        this.starCouldown += STAR_COULDOWN;
+        const starSpawners = new Array();
+        let s = 0;
+        for (const block of this.blocks) {
+          const luck = block.getStarSpawn();
+          if (luck > 0) {
+            s += luck;
+            starSpawners.push({ x: block.x, y: block.y, luck });
+          }
+        }
+        const rand = Math.floor(Math.random() * s);
+        s = 0;
+        for (const spawner of starSpawners) {
+          s += spawner.luck;
+          if (rand < s) {
+            this.stars.push(new Star(
+              spawner.x,
+              spawner.y,
+              Star.SPEED,
+              -Star.JUMP,
+              Star.DEADTIME
+            ));
+            break;
+          }
+        }
+      }
+    }
+    collectPlayerDominations() {
+      const dominations = [];
+      for (const player of this.players) {
+        if (player.vy < Player$2.DOMINATION_FORCE)
+          continue;
+        const list = new Array();
+        for (const victim of this.players) {
+          if (victim === player || victim.respawnCouldown > 0)
+            continue;
+          if (player.y + Player$2.HEIGHT / 2 < victim.y - Player$2.HEIGHT / 2) {
+            list.push(victim);
+          }
+        }
+        if (list) {
+          dominations.push({ player, list });
+        }
+      }
+      return dominations;
+    }
+    applyDominations(dominations) {
+      for (const d of dominations) {
+        const player = d.player;
+        let jump = false;
+        for (const victim of d.list) {
+          if (collision.rect_centeredRect(
+            player.x,
+            player.y,
+            Player$2.WIDTH,
+            Player$2.HEIGHT,
+            victim.x,
+            victim.y,
+            Player$2.WIDTH,
+            Player$2.HEIGHT
+          )) {
+            jump = true;
+            victim.hit();
+          }
+        }
+        if (jump) {
+          player.vy *= -Player$2.DOMINATION_BOUNCE;
+        }
+      }
+    }
+  }
   let ServData$1 = class ServData {
     constructor() {
-      this.killedPlayers = [];
+      this.leaderboard = null;
+      this.sessionDeadPlayers = 0;
     }
   };
-  let Snapshot$6 = class Snapshot {
+  let Snapshot$6 = (_b = class {
     constructor(isServer) {
-      this.players = [
-        new Player$2(540, 290),
-        new Player$2(540, 2090)
-      ];
+      this.starsToWin = 7;
       this.frame = 0;
       this.servData = isServer ? new ServData$1() : null;
+      const players = [];
+      for (let i = 0; i < _b.PLAYER_COUNT; i++) {
+        players.push(new Player$2(0, 0));
+      }
+      this.map = new GameMap(players, isServer);
+      this.map.runTest();
+    }
+    produceLeaderboard() {
+      if (!this.servData)
+        return;
+      const playerIndices = this.map.players.map((_, i) => i);
+      playerIndices.sort((a, b) => this.map.players[b].stars - this.map.players[a].stars);
+      this.servData.leaderboard = playerIndices;
     }
     getLeaderboard() {
-      const len = this.players.length;
       if (!this.servData)
         return null;
-      const killedPlayers = this.servData.killedPlayers;
-      if (killedPlayers.length < this.players.length) {
-        return null;
-      }
-      const leaderboard = new Array(len);
-      for (let i = 0; i < len; i++) {
-        leaderboard[killedPlayers[i]] = len - i - 1;
-      }
-      return leaderboard;
+      return this.servData.leaderboard;
     }
     killPlayer(idx) {
-      if (this.servData && this.players[idx].alive) {
-        this.servData.killedPlayers.push(idx);
-        this.players[idx].alive = false;
+      if (this.servData && this.map.players[idx].sessionAlive) {
+        this.map.players[idx].sessionAlive = false;
+        this.map.players[idx].stars = -++this.servData.sessionDeadPlayers;
       }
     }
-  };
+  }, _b.PLAYER_COUNT = 2, _b);
   const gcowboy = {
     Snapshot: Snapshot$6
   };
   const Snapshot$5 = gcowboy.Snapshot;
-  const cowboy_game = {
-    playerCount: 2,
+  const gstars_game = {
+    playerCount: Snapshot$5.PLAYER_COUNT,
     createSnapshot(isServer) {
       const snapshot = new Snapshot$5(isServer);
       return snapshot;
     },
     extractInput(reader) {
       const writer = new DataWriter();
+      const dx = reader.readFloat32();
+      const flags2 = reader.readUint8();
+      writer.writeFloat32(dx);
+      writer.writeUint8(flags2);
       return writer.toArrayBuffer();
     },
     handleInput(snapshot, data, user) {
-      snapshot.players[user];
+      const player = snapshot.map.players[user];
+      player.dirX = data.readFloat32();
+      player.flags = data.readUint8();
     },
     frame(snapshot, speed) {
+      const map = snapshot.map;
+      const playerDominations = map.collectPlayerDominations();
+      for (const block of map.blocks) {
+        block.runFrame(map, speed);
+      }
+      for (const player of map.players) {
+        for (const p of player.projectiles) {
+          p.vy += Projectile.GRAVITY * speed;
+          p.applyCollisions(map, speed);
+        }
+        if (player.runCouldowns(speed))
+          continue;
+        player.vy += Player$2.GRAVITY * speed;
+        player.applyCollisions(map, speed);
+        if (player.freezeCouldown > 0)
+          continue;
+        player.frame(speed);
+        if (player.mustReleaseStar) {
+          player.releaseStar(
+            map,
+            player.mustReleaseStar.x,
+            player.mustReleaseStar.y
+          );
+          player.mustReleaseStar = null;
+        }
+        if (player.isOutsideBox(map.gameBox)) {
+          player.kill();
+        }
+      }
+      for (let powerup of map.powerups) {
+        powerup.vy += Star.GRAVITY * speed;
+        powerup.applyCollisions(map, speed);
+      }
+      for (let star of map.stars) {
+        star.vy += Star.GRAVITY * speed;
+        star.applyCollisions(map, speed);
+        star.deadtime -= speed;
+      }
+      map.applyDominations(playerDominations);
+      if (map.isServer)
+        map.spawnStars(speed);
+      for (let i = map.stars.length - 1; i >= 0; i--) {
+        const star = map.stars[i];
+        if (star.isOutsideBox(map.gameBox)) {
+          map.stars.splice(i, 1);
+          continue;
+        }
+        if (star.deadtime > 0)
+          continue;
+        const touched = checkPlayerCollisions(star, map.players);
+        if (touched === null)
+          continue;
+        if (++touched.stars >= snapshot.starsToWin) {
+          snapshot.produceLeaderboard();
+        }
+        map.stars.splice(i, 1);
+      }
+      for (let i = map.powerups.length - 1; i >= 0; i--) {
+        const powerup = map.powerups[i];
+        if (powerup.isOutsideBox(map.gameBox)) {
+          map.powerups.splice(i, 1);
+          continue;
+        }
+        const touched = checkPlayerCollisions(powerup, map.players);
+        if (touched === null)
+          continue;
+        touched.powerup = powerups.produce(powerup.type);
+        map.powerups.splice(i, 1);
+      }
+      for (const player of map.players) {
+        for (let i = player.projectiles.length - 1; i >= 0; i--) {
+          const p = player.projectiles[i];
+          if (p.bounces < 0 || p.isOutsideBox(map.gameBox)) {
+            player.projectiles.splice(i, 1);
+            continue;
+          }
+          const victim = checkPlayerCollisions(p, map.players);
+          if (victim === null || victim === player)
+            continue;
+          switch (p.type) {
+            case ProjectileType.ICE:
+              victim.onIce(p.vx);
+              break;
+            case ProjectileType.FIRE:
+              victim.onFire();
+              break;
+          }
+          player.projectiles.splice(i, 1);
+        }
+      }
       snapshot.frame += speed;
     },
     getLeaderboard(snapshot) {
@@ -698,19 +1876,170 @@
       snapshot.killPlayer(user);
     },
     readNetworkDesc(snapshot, reader) {
+      for (const player of snapshot.map.players) {
+        const lifeFlag = reader.readUint8();
+        player.flags = reader.readUint8();
+        if (lifeFlag === -1) {
+          player.sessionAlive = false;
+          player.respawnCouldown = Player$2.RESPAWN_COULDOWN;
+          continue;
+        }
+        player.sessionAlive = true;
+        if (lifeFlag === 0) {
+          player.respawnCouldown = Player$2.RESPAWN_COULDOWN;
+          continue;
+        }
+        player.respawnCouldown = -1;
+        player.x = reader.readFloat32();
+        player.y = reader.readFloat32();
+        player.vx = reader.readFloat32();
+        player.vy = reader.readFloat32();
+        player.dirX = reader.readFloat32();
+        player.stars = reader.readUint8();
+        player.jumps = reader.readInt8();
+        player.immuneCouldown = reader.readUint8() * (Player$2.IMMUNE_COULDOWN / 250);
+        player.freezeCouldown = reader.readUint8() * (Player$2.FREEZE_TIME / 250);
+        player.projectiles.length = 0;
+        const projectileCount = reader.readUint8();
+        for (let i = 0; i < projectileCount; i++) {
+          const x = reader.readFloat32();
+          const y = reader.readFloat32();
+          const type2 = reader.readInt8();
+          const vx = reader.readInt8() / 10;
+          const bounces = reader.readInt8();
+          const vy = reader.readFloat32();
+          player.projectiles.push(new Projectile(x, y, vx, vy, type2, bounces));
+        }
+        const type = reader.readUint8();
+        player.powerup = powerups.produce(type);
+        powerups.recv(reader, player.powerup);
+      }
+      const starCount = reader.readUint16();
+      snapshot.map.stars.length = 0;
+      for (let i = 0; i < starCount; i++) {
+        const x = reader.readFloat32();
+        const y = reader.readFloat32();
+        const vx = reader.readFloat32();
+        const vy = reader.readFloat32();
+        const deadtime = reader.readUint8() * (Star.DEADTIME / 250);
+        const star = new Star(x, y, vx, vy, deadtime);
+        snapshot.map.stars.push(star);
+      }
+      const powerUpCount = reader.readUint16();
+      snapshot.map.powerups.length = 0;
+      for (let i = 0; i < powerUpCount; i++) {
+        const x = reader.readFloat32();
+        const y = reader.readFloat32();
+        const vy = reader.readFloat32();
+        const type = reader.readUint8();
+        const vx = reader.readInt8() / 10;
+        const powerUp = new PowerUpEntity(x, y, vx, vy, type);
+        snapshot.map.powerups.push(powerUp);
+      }
     },
     writeNetworkDesc(snapshot, writer) {
+      for (const player of snapshot.map.players) {
+        let lifeFlag;
+        if (!player.sessionAlive) {
+          lifeFlag = -1;
+        } else if (player.respawnCouldown > 0) {
+          lifeFlag = 0;
+        } else {
+          lifeFlag = 1;
+        }
+        writer.writeUint8(lifeFlag);
+        writer.writeUint8(player.flags);
+        if (lifeFlag <= 0)
+          continue;
+        writer.writeFloat32(player.x);
+        writer.writeFloat32(player.y);
+        writer.writeFloat32(player.vx);
+        writer.writeFloat32(player.vy);
+        writer.writeFloat32(player.dirX);
+        writer.writeUint8(player.stars);
+        writer.writeInt8(player.jumps);
+        writer.writeInt8(Math.floor(Math.max(
+          player.immuneCouldown,
+          0
+        ) * (250 / Player$2.IMMUNE_COULDOWN)));
+        writer.writeInt8(Math.floor(Math.max(
+          player.freezeCouldown,
+          0
+        ) * (250 / Player$2.FREEZE_TIME)));
+        writer.writeUint8(player.projectiles.length);
+        for (const p of player.projectiles) {
+          writer.writeFloat32(p.x);
+          writer.writeFloat32(p.y);
+          writer.writeInt8(p.type);
+          writer.writeInt8(Math.floor(p.vx * 10));
+          writer.writeInt8(p.bounces);
+          writer.writeFloat32(p.vy);
+        }
+        writer.writeUint8(powerups.getType(player.powerup));
+        powerups.send(writer, player.powerup);
+      }
+      writer.writeUint16(snapshot.map.stars.length);
+      for (const star of snapshot.map.stars) {
+        writer.writeFloat32(star.x);
+        writer.writeFloat32(star.y);
+        writer.writeFloat32(star.vx);
+        writer.writeFloat32(star.vy);
+        writer.writeInt8(Math.floor(Math.max(star.deadtime, 0) * (250 / Star.DEADTIME)));
+      }
+      writer.writeUint16(snapshot.map.powerups.length);
+      for (const powerUp of snapshot.map.powerups) {
+        writer.writeFloat32(powerUp.x);
+        writer.writeFloat32(powerUp.y);
+        writer.writeFloat32(powerUp.vy);
+        writer.writeUint8(powerUp.type);
+        writer.writeInt8(Math.floor(powerUp.vx * 10));
+      }
     }
   };
-  const cowboy_client = {
-    game: cowboy_game,
-    name: "Cowboy",
+  function drawBlock(ctx, block) {
+    const size = block.getSize();
+    if (!size) {
+      ctx.fillStyle = "white";
+      ctx.beginPath();
+      ctx.arc(block.x, block.y, 10, 0, 2 * Math.PI);
+      ctx.fill();
+      return;
+    }
+    ctx.save();
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 10;
+    ctx.strokeRect(block.x, block.y, size.w, size.h);
+    ctx.restore();
+  }
+  class Memory {
+    constructor() {
+      this.sentX = NaN;
+      this.sentFlag = 0;
+      this.respawnCouldown = -1;
+      this.camX = 0;
+      this.camY = 0;
+      this.camZ = 1;
+    }
+  }
+  const POWERUP_TEXTURES = [
+    "defaultPowerup",
+    "flowerFire",
+    "flowerIce",
+    "shell",
+    "jump"
+  ];
+  const gstars_client = {
+    game: gstars_game,
+    name: "Stars",
     images: {
-      playerRed: "assets/gpackice/player-red.svg",
-      playerBlue: "assets/gpackice/player-blue.svg",
-      floor: "assets/gpackice/floor.svg"
+      playerRed: "assets/gstars/player-red.svg",
+      playerBlue: "assets/gstars/player-blue.svg",
+      star: "assets/gstars/star.svg",
+      flowerFire: "assets/gstars/flower-fire.svg",
+      flowerIce: "assets/gstars/flower-ice.svg",
+      defaultPowerup: "assets/gstars/defaultPowerup.svg"
     },
-    gameSize: { width: 1080, height: 2400 },
+    gameSize: { width: 1600, height: 900 },
     createMemory(snapshot, client, playerIndex) {
       client.appendJoystick(new Joystick(
         0.9,
@@ -718,13 +2047,38 @@
         JoystickPlacement.SCREEN_RATIO,
         JoystickPlacement.SCREEN_RATIO,
         playerIndex === 0 ? JOYSTICK_COLORS.red : JOYSTICK_COLORS.blue,
-        "move"
+        "move",
+        1,
+        [
+          { key: "KeyD", r: 1, a: 0 },
+          { key: "KeyA", r: 1, a: Math.PI },
+          { key: "KeyW", r: 1, a: Math.PI * 3 / 2 },
+          { key: "KeyS", r: 1, a: Math.PI * 1 / 2 }
+        ]
       ));
-      return {
-        playerDirections: [Math.PI * 1 / 2, Math.PI * 3 / 2],
-        lastSentX: Infinity,
-        lastSentY: Infinity
-      };
+      client.appendButton(new Button(
+        0.1,
+        0.9,
+        ButtonPlacement.SCREEN_RATIO,
+        ButtonPlacement.SCREEN_RATIO,
+        playerIndex === 0 ? BUTTON_COLORS.red : BUTTON_COLORS.blue,
+        "jump",
+        1,
+        1,
+        ["KeyW"]
+      ));
+      client.appendButton(new Button(
+        0.1,
+        0.8,
+        ButtonPlacement.SCREEN_RATIO,
+        ButtonPlacement.SCREEN_RATIO,
+        BUTTON_COLORS.yellow,
+        "powerup",
+        1,
+        1,
+        ["Space"]
+      ));
+      return new Memory();
     },
     getTimer(snapshot) {
       return -1;
@@ -738,46 +2092,148 @@
       ctx.fillRect(0, 0, screenWidth, screenHeight);
       ctx.save();
       applyToScreen();
+      ctx.save();
+      ctx.translate(800, 450);
+      ctx.scale(memory.camZ, memory.camZ);
+      ctx.translate(-memory.camX, -memory.camY);
+      for (const block of snapshot.map.blocks) {
+        drawBlock(ctx, block);
+      }
+      for (const player2 of snapshot.map.players) {
+        for (const p of player2.projectiles) {
+          switch (p.type) {
+            case ProjectileType.ICE:
+              ctx.fillStyle = "#0ff";
+              break;
+            case ProjectileType.FIRE:
+              ctx.fillStyle = "#f70";
+              break;
+          }
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, Projectile.RADIUS, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      }
+      for (const powerup of snapshot.map.powerups) {
+        ctx.save();
+        ctx.translate(powerup.x, powerup.y);
+        const path = POWERUP_TEXTURES[powerup.type];
+        ctx.drawImage(
+          imageLoader.getImage(path),
+          -PowerUpEntity.WIDTH / 2,
+          -PowerUpEntity.HEIGHT / 2,
+          PowerUpEntity.WIDTH,
+          PowerUpEntity.HEIGHT
+        );
+        ctx.restore();
+      }
+      const starImg = imageLoader.getImage("star");
+      for (const star of snapshot.map.stars) {
+        ctx.save();
+        ctx.translate(star.x, star.y);
+        ctx.drawImage(
+          starImg,
+          -Star.WIDTH / 2,
+          -Star.HEIGHT / 2,
+          Star.WIDTH,
+          Star.HEIGHT
+        );
+        ctx.restore();
+      }
       const imagesNames = ["playerRed", "playerBlue"];
       for (let i = 0; i < 2; i++) {
-        const player = snapshot.players[i];
-        const px = player.x;
-        const py = player.y;
-        const half = 40;
-        const size = half * 2;
+        const player2 = snapshot.map.players[i];
+        if (player2.respawnCouldown > 0)
+          continue;
+        const px = player2.x;
+        const py = player2.y;
         ctx.save();
         ctx.translate(px, py);
-        ctx.rotate(memory.playerDirections[i]);
+        ctx.scale(
+          snapshot.map.players[i].flags & flags.LOOK_LEFT ? -1 : 1,
+          1
+        );
         ctx.drawImage(
           imageLoader.getImage(imagesNames[i]),
-          -half,
-          -half,
-          size,
-          size
+          -Player$2.WIDTH / 2,
+          -Player$2.HEIGHT / 2,
+          Player$2.WIDTH,
+          Player$2.HEIGHT
         );
         ctx.restore();
       }
       ctx.restore();
+      ctx.restore();
+      ctx.drawImage(
+        imageLoader.getImage("star"),
+        10,
+        10,
+        50,
+        50
+      );
+      const player = snapshot.map.players[playerIndex];
+      ctx.fillStyle = "yellow";
+      ctx.font = "32px monospace";
+      ctx.fillText(`${player.stars.toString().padStart(2, "0")}/10`, 70, 45);
+      let powerupImg;
+      if (player.powerup instanceof powerups.Default) {
+        powerupImg = POWERUP_TEXTURES[0];
+      } else if (player.powerup instanceof powerups.Fire) {
+        powerupImg = POWERUP_TEXTURES[1];
+      } else if (player.powerup instanceof powerups.Ice) {
+        powerupImg = POWERUP_TEXTURES[2];
+      } else {
+        powerupImg = "";
+      }
+      ctx.drawImage(
+        imageLoader.getImage(powerupImg),
+        10,
+        70,
+        50,
+        50
+      );
     },
     clientFrame(snapshot, memory, playerIndex, client) {
-      for (let i = 0; i < snapshot.players.length; i++) {
-        if (i == playerIndex)
-          continue;
+      const player = snapshot.map.players[playerIndex];
+      if (player.respawnCouldown <= 0) {
+        memory.respawnCouldown = -1;
+      } else if (memory.respawnCouldown > 0) {
+        memory.respawnCouldown -= 1e3 / 60;
+      } else {
+        memory.respawnCouldown = Player$2.RESPAWN_COULDOWN;
       }
       let dir = client.getJoyStickDirection("move");
       if (!dir) {
         dir = { x: 0, y: 0 };
       }
-      if (dir.x != memory.lastSentX || dir.y != memory.lastSentY) {
-        memory.lastSentX = dir.x;
-        memory.lastSentY = dir.y;
-        if (dir.x != 0 || dir.y != 0) {
-          memory.playerDirections[playerIndex] = Math.atan2(dir.y, dir.x);
-        }
+      let flag = memory.sentFlag & flags.WAS_JUMPING & flags.WAS_POWER;
+      if (dir.y < -0.8)
+        flag |= flags.DIVE;
+      if (dir.x < 0) {
+        flag |= flags.LOOK_LEFT;
+      } else if (dir.x === 0) {
+        flag |= memory.sentFlag & flags.LOOK_LEFT;
+      }
+      if (client.getButton("jump")) {
+        flag |= flags.JUMP;
+      }
+      if (client.getButton("powerup")) {
+        flag |= flags.POWER;
+      }
+      if (dir.x != memory.sentX || flag != memory.sentFlag) {
+        memory.sentX = dir.x;
+        memory.sentFlag = flag;
         const writer = new DataWriter();
         writer.writeFloat32(dir.x);
-        writer.writeFloat32(dir.y);
+        writer.writeUint8(flag);
         client.addInput(writer.toArrayBuffer());
+      }
+      if (player.respawnCouldown >= 0) {
+        memory.camX = 0;
+        memory.camY = 0;
+      } else {
+        memory.camX = player.x;
+        memory.camY = player.y;
       }
     },
     handleSubTouchEvent(snapshot, kind, event, screenWidth, screenHeight, canvasWidth, canvasHeight) {
@@ -827,25 +2283,25 @@
       this.killedPlayers = [];
     }
   }
-  let Snapshot$4 = (_a = class {
+  let Snapshot$4 = (_c = class {
     constructor(isServer) {
       this.players = [
         new Player$1(540, 290),
         new Player$1(540, 2090)
       ];
-      this.tiles = new Int16Array(_a.TILES_Y * _a.TILES_X);
+      this.tiles = new Int16Array(_c.TILES_Y * _c.TILES_X);
       this.frame = 0;
       this.servData = isServer ? new ServData() : null;
-      this.tiles.fill(_a.LIFETIME);
+      this.tiles.fill(_c.LIFETIME);
     }
     *onSquare() {
       const seen = /* @__PURE__ */ new Set();
       for (const player of this.players) {
         const px = player.x;
         const py = player.y;
-        for (let dy = -_a.SEND_RANGE; dy <= _a.SEND_RANGE; dy++) {
-          for (let dx = -_a.SEND_RANGE; dx <= _a.SEND_RANGE; dx++) {
-            const idx = _a.getIdx(px + dx, py + dy);
+        for (let dy = -_c.SEND_RANGE; dy <= _c.SEND_RANGE; dy++) {
+          for (let dx = -_c.SEND_RANGE; dx <= _c.SEND_RANGE; dx++) {
+            const idx = _c.getIdx(px + dx, py + dy);
             if (idx === -1) continue;
             if (seen.has(idx)) continue;
             seen.add(idx);
@@ -876,17 +2332,17 @@
       }
     }
     static getIdx(x, y) {
-      if (x < 0 || y < 0 || x >= _a.TILES_X || y >= _a.TILES_Y)
+      if (x < 0 || y < 0 || x >= _c.TILES_X || y >= _c.TILES_Y)
         return -1;
-      return y * _a.TILES_X + x;
+      return y * _c.TILES_X + x;
     }
-  }, _a.TILES_X = 9, _a.TILES_Y = 21, _a.LIFETIME = 12 * 1e3, _a.SEND_RANGE = 3, _a.PLAYER_RADIUS = 40, _a);
+  }, _c.TILES_X = 9, _c.TILES_Y = 21, _c.LIFETIME = 12 * 1e3, _c.SEND_RANGE = 3, _c.PLAYER_RADIUS = 40, _c.TILE_MODULO = 5 * 1e3, _c);
   const gpackice = {
     Snapshot: Snapshot$4
   };
   const Snapshot$3 = gpackice.Snapshot;
   const PLAYER_SPEED$1 = 0.4;
-  const TILE_MODULO = 5 * 1e3;
+  const TILE_MODULO = Snapshot$3.TILE_MODULO;
   const packice_game = {
     playerCount: 2,
     createSnapshot(isServer) {
@@ -953,7 +2409,7 @@
         player.alive = reader.readInt8() != 0;
       }
       for (const tile of snapshot.onSquare()) {
-        snapshot.tiles[tile.idx] = tile.value;
+        snapshot.tiles[tile.idx] = reader.readInt16();
       }
     },
     writeNetworkDesc(snapshot, writer) {
@@ -964,18 +2420,34 @@
         writer.writeFloat32(player.vy);
         writer.writeInt8(player.alive ? 1 : 0);
       }
+      for (const tile of snapshot.onSquare()) {
+        writer.writeInt16(tile.value);
+      }
     }
   };
   const Snapshot$2 = gpackice.Snapshot;
   const TILES_X = Snapshot$2.TILES_X;
   const TILES_Y = Snapshot$2.TILES_Y;
+  function drawRoundedRect(ctx, x, y, width, height, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.arcTo(x + width, y, x + width, y + radius, radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.arcTo(x + width, y + height, x + width - radius, y + height, radius);
+    ctx.lineTo(x + radius, y + height);
+    ctx.arcTo(x, y + height, x, y + height - radius, radius);
+    ctx.lineTo(x, y + radius);
+    ctx.arcTo(x, y, x + radius, y, radius);
+    ctx.closePath();
+    ctx.fill();
+  }
   const packice_client = {
     game: packice_game,
     name: "Pingouins",
     images: {
       playerRed: "assets/gpackice/player-red.svg",
-      playerBlue: "assets/gpackice/player-blue.svg",
-      floor: "assets/gpackice/floor.svg"
+      playerBlue: "assets/gpackice/player-blue.svg"
     },
     gameSize: { width: 1080, height: 2400 },
     createMemory(snapshot, client, playerIndex) {
@@ -1005,18 +2477,19 @@
       ctx.fillRect(0, 0, screenWidth, screenHeight);
       ctx.save();
       applyToScreen();
-      const floorImg = imageLoader.getImage("floor");
       let tile = 0;
+      ctx.save();
       for (let y = 0; y < TILES_Y; y++) {
         for (let x = 0; x < TILES_X; x++) {
           const line = snapshot.tiles[tile];
-          ctx.save();
-          ctx.globalAlpha = line / Snapshot$2.LIFETIME;
-          ctx.drawImage(floorImg, 100 * x + 90, 100 * y + 140, 100, 100);
-          ctx.restore();
           tile++;
+          if (line === 0)
+            continue;
+          ctx.fillStyle = `rgba(255,255,255,${line / Snapshot$2.LIFETIME})`;
+          drawRoundedRect(ctx, 100 * x + 100, 100 * y + 150, 80, 80, 10);
         }
       }
+      ctx.restore();
       const imagesNames = ["playerRed", "playerBlue"];
       for (let i = 0; i < 2; i++) {
         const player = snapshot.players[i];
@@ -1225,7 +2698,7 @@
   };
   const CLIENT_DESCRIPTIONS = [
     packice_client,
-    cowboy_client,
+    gstars_client,
     test_client
   ];
   let socket = null;
@@ -1618,6 +3091,7 @@
       ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
       gameEngine.draw(ctx);
       gameEngine.drawJoysticks(ctx, screenArea);
+      gameEngine.drawButtons(ctx, screenArea);
       updateTimerDisplay(gameEngine);
       animationFrameId = requestAnimationFrame(gameLoop);
     }
@@ -1657,6 +3131,8 @@
     }
     if (joinLobbyBtn) {
       joinLobbyBtn.addEventListener("click", () => {
+        if (globalGameEngine)
+          return;
         const lobbyHash = prompt("Enter lobby hash:");
         if (lobbyHash) {
           sendJoinLobby(lobbyHash);
@@ -1692,4 +3168,14 @@
       globalGameEngine.handleTouchEvent("touchend", e);
     }
   }, { passive: false });
+  document.addEventListener("keypress", (e) => {
+    if (globalGameEngine) {
+      globalGameEngine.handleKeypress(e.code);
+    }
+  });
+  document.addEventListener("keyup", (e) => {
+    if (globalGameEngine) {
+      globalGameEngine.handleKeyup(e.code);
+    }
+  });
 })();
