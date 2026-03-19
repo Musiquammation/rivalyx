@@ -15,6 +15,8 @@ export class Player extends Entity {
 	static readonly JUMPS = 2;
 	
 	static readonly JUMP = 1.2;
+	static readonly DOMINATION_BOUNCE = 0.7;
+	static readonly DOMINATION_FORCE = .6;
 	static readonly GRAVITY = 2.400 / 1000;
 
 	static readonly MAX_SPEED = 1.5;
@@ -28,7 +30,7 @@ export class Player extends Entity {
 	static readonly RESPAWN_COULDOWN = 3 * 1000;
 	static readonly IMMUNE_COULDOWN = 1 * 1000;
 
-	static readonly FROZE_TIME = 1.5 * 1000;
+	static readonly FREEZE_TIME = 1.5 * 1000;
 
 	dirX = 0;
 	flags = 0;
@@ -40,7 +42,7 @@ export class Player extends Entity {
 	immuneCouldown = Player.IMMUNE_COULDOWN;
 	powerup = new powerups.Default();
 	projectiles: Projectile[] = [];
-	froze = 0;
+	freezeCouldown = 0;
 
 
 	constructor(x: number, y: number) {
@@ -49,6 +51,11 @@ export class Player extends Entity {
 
 	
 	runCouldowns(speed: number) {
+		if (this.freezeCouldown > 0) {
+			this.freezeCouldown -= speed;
+			return false;
+		}
+
 		if (this.respawnCouldown > 0) {
 			this.respawnCouldown -= speed;
 			if (this.respawnCouldown > 0)
@@ -121,8 +128,6 @@ export class Player extends Entity {
 			}
 		}
 
-		// Apply gravity
-		this.vy += Player.GRAVITY * speed;
 
 		// Jump
 		if ((this.flags & flags.JUMP) === 0) {
@@ -175,6 +180,9 @@ export class Player extends Entity {
 	}
 
 	hit() {
+		if (this.freezeCouldown > 0)
+			return;
+
 		if (this.immuneCouldown <= 0) {
 			this.immuneCouldown = Player.IMMUNE_COULDOWN;
 			this.mustReleaseStar = {x: this.x, y: this.y};
@@ -185,6 +193,7 @@ export class Player extends Entity {
 		this.mustReleaseStar = {x: this.x, y: this.y - Player.HEIGHT};	
 		this.immuneCouldown = Player.IMMUNE_COULDOWN;
 		this.respawnCouldown = Player.RESPAWN_COULDOWN;
+		this.freezeCouldown = 0;
 		this.x = 0;
 		this.y = 0;
 	}
@@ -212,13 +221,13 @@ export class Player extends Entity {
 	
 
 	onIce(dir: number) {
-		if (this.froze === 0)
-			this.froze = Player.FROZE_TIME;
+		if (this.freezeCouldown <= 0)
+			this.freezeCouldown = Player.FREEZE_TIME;
 	}
 
 	onFire() {
-		if (this.froze > 0) {
-			this.froze = 0;
+		if (this.freezeCouldown > 0) {
+			this.freezeCouldown = 0;
 			return;
 		}
 

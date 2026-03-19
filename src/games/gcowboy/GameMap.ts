@@ -1,4 +1,5 @@
 import { Block } from "./Block";
+import { collision } from "./collision";
 import { mods } from "./mods";
 import { Player } from "./Player";
 import { PowerUpEntity } from "./PowerUp";
@@ -80,6 +81,55 @@ export class GameMap {
                         
                     break;
                 }
+            }
+        }
+    }
+
+
+    collectPlayerDominations() {
+		const dominations: {player: Player, list: Player[]}[] = [];
+
+        for (const player of this.players) {
+            if (player.vy < Player.DOMINATION_FORCE)
+                continue; // player going to the top or with no enough strong
+
+            const list = new Array<Player>();
+            for (const victim of this.players) {
+                if (victim === player || victim.respawnCouldown > 0)
+                    continue;
+
+                if (player.y + Player.HEIGHT/2 < victim.y - Player.HEIGHT/2) {
+                    list.push(victim);
+                }
+            }
+
+
+            if (list) {
+                dominations.push({player, list});
+            }
+        }
+
+        return dominations;
+    }
+
+    applyDominations(dominations: {player: Player, list: Player[]}[]) {
+        for (const d of dominations) {
+            const player = d.player;
+            let jump = false;
+
+            for (const victim of d.list) {
+                if (collision.rect_centeredRect(
+                    player.x, player.y, Player.WIDTH, Player.HEIGHT,
+                    victim.x, victim.y, Player.WIDTH, Player.HEIGHT
+                )) {
+                    // Domination applies
+                    jump = true;
+                    victim.hit();
+                }
+            }
+
+            if (jump) {
+                player.vy *= -Player.DOMINATION_BOUNCE;
             }
         }
     }

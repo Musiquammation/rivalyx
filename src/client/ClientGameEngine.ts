@@ -378,6 +378,61 @@ export class ClientGameEngine {
 	}
 
 
+	handleKeydown(code: string) {
+		// Handle buttons
+		for (const button of this.buttons) {
+			if (button.keys.indexOf(code) < 0)
+				continue;
+
+			if (button.pressedKeys.indexOf(code) >= 0)
+				continue; // key already pressed
+			
+			button.pressedKeys.push(code);
+		}
+
+		// Handle joysticks
+		for (const joystick of this.joysticks) {
+			for (const key of joystick.keys) {
+				if (key.key !== code)
+					continue;
+
+				if (joystick.pressedKeys.indexOf(code) >= 0)
+					continue; // key already pressed
+
+				joystick.pressedKeys.push(code);
+			}
+		}
+	}
+
+	handleKeyup(code: string) {
+		// Handle buttons
+		for (const button of this.buttons) {
+			if (button.keys.indexOf(code) < 0)
+				continue;
+
+			if (button.pressedKeys.indexOf(code) < 0)
+				continue; // key already absent
+			
+			button.pressedKeys = button.pressedKeys.filter(x => x !== code);
+		}
+
+
+		// Handle joysticks
+		for (const joystick of this.joysticks) {
+			for (const key of joystick.keys) {
+				if (key.key !== code)
+					continue;
+
+				if (joystick.pressedKeys.indexOf(code) < 0)
+					continue; // key already absent
+
+				joystick.pressedKeys = joystick.pressedKeys.filter(x => x !== code);
+			}
+		}
+	}
+
+
+
 	appendButton(button: Button) {
 		this.buttons.add(button);
 	}
@@ -419,13 +474,13 @@ export class ClientGameEngine {
 	getJoyStickDirection(label: string) {
 		const joystick = Array.from(this.joysticks).find(j => j.label === label);
 		if (!joystick) return null;
-		return { x: joystick.stickX, y: joystick.stickY };
+		return joystick.getStick();
 	}
 
 	getButton(label: string) {
 		const button = Array.from(this.buttons).find(j => j.label === label);
 		if (!button) return false;
-		return button.activeTouchId !== null;
+		return button.pressedKeys.length || button.activeTouchId !== null;
 	}
 
 
@@ -521,12 +576,10 @@ export class ClientGameEngine {
 		for (const joystick of this.joysticks) {
 			joystick.updateRatio(screenArea);
 
-			// if (joystick.activeTouchId === undefined) continue;
 
 			const pos = this.getJoystickPosition(joystick, screenWidth, screenHeight, canvasWidth, canvasHeight);
 			const radius = joystick.radius;
-			const stickX = joystick.stickX;
-			const stickY = joystick.stickY;
+			const stick = joystick.getStick();
 
 			// Draw joystick base
 			ctx.fillStyle = `rgba(${joystick.color.base[0]}, ${joystick.color.base[1]}, ${joystick.color.base[2]}, 0.5)`;
@@ -538,7 +591,11 @@ export class ClientGameEngine {
 			const stickRadius = radius * 0.4;
 			ctx.fillStyle = `rgba(${joystick.color.stick[0]}, ${joystick.color.stick[1]}, ${joystick.color.stick[2]}, 0.8)`;
 			ctx.beginPath();
-			ctx.arc(pos.x + stickX * radius * 0.6, pos.y + stickY * radius * 0.6, stickRadius, 0, Math.PI * 2);
+			ctx.arc(
+				pos.x + stick.x * radius * 0.6,
+				pos.y + stick.y * radius * 0.6,
+				stickRadius, 0, Math.PI * 2
+			);
 			ctx.fill();
 		}
 	}
@@ -559,7 +616,7 @@ export class ClientGameEngine {
 			const height = button.height;
 
 			// Draw button
-			const color = button.activeTouchId === null ?
+			const color = (button.activeTouchId === null && button.pressedKeys.length === 0) ?
 				button.color.idle : button.color.pressed;
 
 			ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.5)`;

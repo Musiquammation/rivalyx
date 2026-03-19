@@ -42,6 +42,10 @@ export const cowboy_game: GameInterface<Snapshot> = {
 	frame(snapshot: Snapshot, speed: number) {
 		const map = snapshot.map;
 
+		// Collect player hits
+		const playerDominations = map.collectPlayerDominations();
+
+
 		// Map frames
 		for (const block of map.blocks) {
 			block.runFrame(map, speed);
@@ -49,16 +53,23 @@ export const cowboy_game: GameInterface<Snapshot> = {
 
 		// Players and move projectiles
 		for (const player of map.players) {
+			// Projectiles
 			for (const p of player.projectiles) {
 				p.vy += Projectile.GRAVITY * speed; // gravity
 				p.applyCollisions(map, speed);
 			}
 
+
 			if (player.runCouldowns(speed))
 				continue;
 
-			player.frame(speed);
+			player.vy += Player.GRAVITY * speed; // gravity
 			player.applyCollisions(map, speed);
+
+			if (player.freezeCouldown > 0)
+				continue;
+
+			player.frame(speed);
 
 			if (player.mustReleaseStar) {
 				player.releaseStar(
@@ -90,8 +101,11 @@ export const cowboy_game: GameInterface<Snapshot> = {
 		}
 
 
+		// Player dominations
+		map.applyDominations(playerDominations);
+
 		// Stars
-		if (snapshot.servData)
+		if (map.isServer)
 			map.spawnStars(speed);
 
 		// Collision with players (stars)
@@ -205,6 +219,7 @@ export const cowboy_game: GameInterface<Snapshot> = {
 			player.stars = reader.readUint8();
 			player.jumps = reader.readInt8();
 			player.immuneCouldown = reader.readUint8() * (Player.IMMUNE_COULDOWN/250);
+			player.freezeCouldown = reader.readUint8() * (Player.FREEZE_TIME/250);
 			
 			// Projectiles
 			player.projectiles.length = 0;
@@ -277,7 +292,10 @@ export const cowboy_game: GameInterface<Snapshot> = {
 			writer.writeFloat32(player.dirX);
 			writer.writeUint8(player.stars);
 			writer.writeInt8(player.jumps);
-			writer.writeInt8(Math.floor(Math.max(player.immuneCouldown,0) * (250/Player.IMMUNE_COULDOWN)));
+			writer.writeInt8(Math.floor(Math.max(
+				player.immuneCouldown,0) * (250/Player.IMMUNE_COULDOWN)));
+			writer.writeInt8(Math.floor(Math.max(
+				player.freezeCouldown,0) * (250/Player.FREEZE_TIME)));
 
 			// Projectiles
 			writer.writeUint8(player.projectiles.length);

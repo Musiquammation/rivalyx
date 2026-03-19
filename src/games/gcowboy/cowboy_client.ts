@@ -55,20 +55,26 @@ export const cowboy_client: ClientInterface<Snapshot, Memory> = {
 		client.appendJoystick(new Joystick(
 			0.9, 0.9, JoystickPlacement.SCREEN_RATIO, JoystickPlacement.SCREEN_RATIO,
 			playerIndex === 0 ? JOYSTICK_COLORS.red : JOYSTICK_COLORS.blue,
-			'move'
+			'move', 1,
+			[
+				{key: 'KeyD', r: 1, a: 0},
+				{key: 'KeyA', r: 1, a: Math.PI},
+				{key: 'KeyW', r: 1, a: Math.PI * 5.5},
+				{key: 'KeyS', r: 1, a: Math.PI * 0.5},
+			]
 		));
 
 
 		client.appendButton(new Button(
 			0.1, 0.9, ButtonPlacement.SCREEN_RATIO, ButtonPlacement.SCREEN_RATIO,
 			playerIndex === 0 ? BUTTON_COLORS.red : BUTTON_COLORS.blue,
-			'jump', 1, 1
+			'jump', 1, 1, ['KeyW']
 		));
 
 		client.appendButton(new Button(
 			0.1, 0.8, ButtonPlacement.SCREEN_RATIO, ButtonPlacement.SCREEN_RATIO,
 			BUTTON_COLORS.yellow,
-			'powerup', 1, 1
+			'powerup', 1, 1, ['Space']
 		));
 
 		

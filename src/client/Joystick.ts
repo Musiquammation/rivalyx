@@ -35,6 +35,9 @@ export class Joystick {
 	originX?: number;
 	originY?: number;
 
+	keys;
+	pressedKeys: string[] = [];
+
 	constructor(
 		x: number,
 		y: number,
@@ -42,7 +45,8 @@ export class Joystick {
 		ypl: JoystickPlacement,
 		color: JoystickColor,
 		label: string,
-		radiusRatio: number = 1
+		radiusRatio: number = 1,
+		keys: {key: string, a: number, r: number}[] = []
 	) {
 		this.x = x;
 		this.y = y;
@@ -57,11 +61,50 @@ export class Joystick {
 		this.stickY = 0;
 		this.originX = undefined;
 		this.originY = undefined;
+
+		this.keys = keys;
 	}
 
-	static FACTOR = 0.05;
+	static readonly FACTOR = 0.05;
 
 	updateRatio(screenArea: number) {
 		this.radius = screenArea * this.radiusRatio * Joystick.FACTOR;
+	}
+
+
+	getStick() {
+		if (this.pressedKeys.length === 0) {
+			return {x: this.stickX, y: this.stickY};
+		}
+
+		let x = 0;
+		let y = 0;
+		let r = 0;
+		let n = 0;
+
+		for (const p of this.pressedKeys) {
+			for (const k of this.keys) {
+				if (k.key === p) {
+					r += k.r;
+					x += k.r * Math.cos(k.a);
+					y += k.r * Math.sin(k.a);
+					n++;
+				}
+			}
+		}
+
+		// Take average values
+		n = 1/n;
+		x *= n;
+		y *= n;
+		r *= n;
+
+
+		const factor = r / Math.sqrt(x*x + y*y);
+		x *= factor;
+		y *= factor;
+		
+		return {x, y};
+
 	}
 }

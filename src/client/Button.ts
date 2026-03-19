@@ -30,6 +30,8 @@ export class Button {
 	label: string;
 	color: ButtonColor;
 	activeTouchId: number|null = null;
+	keys: string[];
+	pressedKeys: string[] = [];
 
 	constructor(
 		x: number,
@@ -40,6 +42,7 @@ export class Button {
 		label: string,
 		widthRatio: number,
 		heightRatio: number,
+		keys: string[] = []
 	) {
 		this.x = x;
 		this.y = y;
@@ -51,6 +54,7 @@ export class Button {
 		this.color = color;
 		this.width = 0;
 		this.height = 0;
+		this.keys = keys;
 	}
 
 	static FACTOR = 0.05;

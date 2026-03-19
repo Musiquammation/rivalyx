@@ -601,6 +601,9 @@ document.addEventListener("DOMContentLoaded", () => {
 	
 	if (joinLobbyBtn) {
 		joinLobbyBtn.addEventListener("click", () => {
+			if (globalGameEngine)
+				return;	
+
 			const lobbyHash = prompt("Enter lobby hash:");
 			if (lobbyHash) {
 				sendJoinLobby(lobbyHash);
@@ -646,3 +649,16 @@ document.addEventListener("touchcancel", e => {
 		globalGameEngine.handleTouchEvent('touchend', e);
 	}
 }, {passive: false});
+
+
+document.addEventListener("keydown", e => {
+	if (globalGameEngine) {
+		globalGameEngine.handleKeydown(e.code);
+	}
+});
+
+document.addEventListener("keyup", e => {
+	if (globalGameEngine) {
+		globalGameEngine.handleKeyup(e.code);
+	}
+});
