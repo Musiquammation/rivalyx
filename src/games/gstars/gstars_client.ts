@@ -259,7 +259,6 @@ export const gstars_client: ClientInterface<Snapshot, Memory> = {
 		if (!dir) {
 			dir = {x: 0, y: 0};
 		}
-		console.log(dir.x, dir.y);
 		
 		let flag = memory.sentFlag & flags.WAS_JUMPING & flags.WAS_POWER;
 

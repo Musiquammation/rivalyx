@@ -17,7 +17,7 @@ class Snapshot {
 	static readonly PLAYER_COUNT = 2;
 
 	map: GameMap;
-	starsToWin = 10;
+	starsToWin = 7;
 
 	servData: ServData | null;
 	frame = 0;
@@ -40,8 +40,10 @@ class Snapshot {
 		if (!this.servData)
 			return;
 
-		
-		
+
+		const playerIndices = this.map.players.map((_, i) => i);
+		playerIndices.sort((a, b) => this.map.players[b].stars - this.map.players[a].stars);
+		this.servData.leaderboard = playerIndices;		
 	}
 
 	getLeaderboard() {
