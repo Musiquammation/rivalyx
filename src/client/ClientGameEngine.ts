@@ -1,10 +1,10 @@
 import { GameInterface } from "../GameInterface";
-import { getTimestamp } from "../getTimestamp";
 import { DataReader } from "../net/DataReader";
 import { DataWriter } from "../net/DataWriter";
 import { SERVER_IDS } from "../net/SERVER_IDS";
 import { Button, ButtonPlacement } from "./Button";
 import { ClientInterface } from "./ClientInterface";
+import { getTimestamp, TIME_PRECISION } from "./getTimestamp";
 import { ImageLoader } from "./ImageLoader";
 import { Joystick, JoystickPlacement } from "./Joystick";
 
@@ -103,6 +103,8 @@ export class ClientGameEngine {
 
 	
 	runFrame(duration: number) {
+		duration /= TIME_PRECISION;
+		
 		while (duration >= MAX_FRAME_DURATION) {
 			this.object.game.frame(this.snapshot, MAX_FRAME_DURATION);
 			duration -= MAX_FRAME_DURATION;

@@ -160,6 +160,7 @@ function handleMessage(socket: WebSocket, data: Buffer, player: Player) {
 	
 	let continueWhileTrue = true;
 	let messageId = reader.readUint8();
+
 	while (continueWhileTrue) {
 		// Server reads SERVER_IDS because it receives messages from client
 		if (messageId === SERVER_IDS.FINISH) {
@@ -183,14 +184,14 @@ function handleMessage(socket: WebSocket, data: Buffer, player: Player) {
 			handleSeekLobby(reader, player);
 			break;
 		
-		case SERVER_IDS.SYNC:
-			handleSync(reader, player, socket);
-			break;
-			
 		case SERVER_IDS.GAME_DATA:
 			continueWhileTrue = handleGameData(reader, player);
 			break;
-			
+
+		case SERVER_IDS.SYNC:
+			handleSync(reader, player, socket);
+			break;
+						
 		default:
 			console.warn("Unknown message ID:", messageId);
 			break;

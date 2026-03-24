@@ -73,4 +73,8 @@ export class DataReader {
 		return new Uint8Array(array);
 	}
 
+	getLength() {
+		return this.view.byteLength;
+	}
+
 }

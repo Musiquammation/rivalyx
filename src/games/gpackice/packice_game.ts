@@ -69,10 +69,11 @@ export const packice_game: GameInterface<Snapshot> = {
 
 
 		// Reduce tiles
+		const intSpeed = Math.floor(speed);
 		for (let i = 0; i < snapshot.tiles.length; i++) {
 			const tile = snapshot.tiles[i];
 			if (tile > 0 && (tile % TILE_MODULO) !== 0) {
-				snapshot.tiles[i] = Math.max(tile - speed, Math.floor(tile / TILE_MODULO) * TILE_MODULO);
+				snapshot.tiles[i] = Math.max(tile - intSpeed, Math.floor(tile / TILE_MODULO) * TILE_MODULO);
 			}
 		}
 

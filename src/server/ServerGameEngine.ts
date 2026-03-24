@@ -2,7 +2,7 @@ import { DataReader } from "../net/DataReader";
 import { DataWriter } from "../net/DataWriter";
 import { GameInterface } from "../GameInterface";
 import { CLIENT_IDS } from "../net/CLIENT_IDS";
-import { getTimestamp } from "../getTimestamp";
+import { getTimestamp, TIME_PRECISION } from "./getTimestamp";
 import { TimeSyncInterface } from "./TimeSync";
 
 
@@ -63,9 +63,11 @@ export class ServerGameEngine {
 
 		// # Read inputs #
 		while (true) {
-			const date = sync.toServ(reader.readUint32());
-			if (date === 0)
+			const idate = reader.readUint32();
+			if (idate === 0)
 				break;
+
+			const date = sync.toServ(idate);
 
 			// Check order
 			if (date < lastDate) {
@@ -73,6 +75,7 @@ export class ServerGameEngine {
 			} else {
 				lastDate = date;
 			}
+
 
 			newInputs.push({
 				date,
@@ -214,6 +217,8 @@ export class ServerGameEngine {
 
 
 	private runFrame(snapshot: any, duration: number) {
+		duration /= TIME_PRECISION;
+
 		while (duration >= MAX_FRAME_DURATION) {
 			this.object.frame(snapshot, MAX_FRAME_DURATION);
 			duration -= MAX_FRAME_DURATION;

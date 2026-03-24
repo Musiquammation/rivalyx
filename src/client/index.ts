@@ -6,7 +6,7 @@ import { ClientGameEngine } from "./ClientGameEngine";
 import { ImageLoader } from "./ImageLoader";
 import { CLIENT_DESCRIPTIONS } from "./clientGameList";
 import {} from "./windowScope"
-import { getTimestamp } from "../getTimestamp";
+import { getTimestamp } from "../server/getTimestamp";
 
 
 let socket: WebSocket | null = null;

@@ -1,4 +1,4 @@
-import { getTimestamp } from "../getTimestamp";
+import { getTimestamp } from "./getTimestamp";
 import { CLIENT_IDS } from "../net/CLIENT_IDS";
 import { DataWriter } from "../net/DataWriter";
 
@@ -16,11 +16,11 @@ export class TimeSync implements TimeSyncInterface {
 	}
 
 	toServ(date: number): number {
-		return date + this.offset;
+		return date - this.offset;
 	}
 
 	toClient(date: number): number {
-		return date - this.offset;
+		return date + this.offset;
 	}
 }
 
