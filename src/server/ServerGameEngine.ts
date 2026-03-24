@@ -3,14 +3,11 @@ import { DataWriter } from "../net/DataWriter";
 import { GameInterface } from "../GameInterface";
 import { CLIENT_IDS } from "../net/CLIENT_IDS";
 import { getTimestamp } from "../getTimestamp";
+import { TimeSyncInterface } from "./TimeSync";
 
 
 
-type PlayerRanking = number[];
 
-interface Timeline {
-	date: number;
-}
 
 interface Input {
 	date: number;
@@ -24,28 +21,21 @@ const MAX_FRAME_DURATION = 10;
 
 
 export class ServerGameEngine {
-	private timelines: Timeline[];
 	private inputs: Input[] = [];
 	private snapshot: any;
 	private startFlag: number;
 	private dead = false;
+	private syncs: TimeSyncInterface[];
 
 	object: GameInterface<any>;
 
-	constructor(object: GameInterface<any>) {
+	constructor(object: GameInterface<any>, syncs: TimeSyncInterface[]) {
 		this.object = object;
 		this.snapshot = object.createSnapshot(true);
 
 		const count = object.playerCount;
-		const timelines: Timeline[] = [];
-		for (let i = 0; i < count; i++) {
-			timelines.push({
-				date: getTimestamp()
-			});
-		}
-
-		this.startFlag = (1<<count) - 1;
-		this.timelines = timelines;
+		this.startFlag = (1 << count) - 1;
+		this.syncs = syncs;
 	}
 
 
@@ -65,12 +55,15 @@ export class ServerGameEngine {
 	}
 
 	private appendInputs(reader: DataReader, user: number, clientDate: number) {
+		const sync = this.syncs[user];
+		clientDate = sync.toServ(clientDate);
+
 		const newInputs = [];
 		let lastDate = -Infinity;
 
 		// # Read inputs #
 		while (true) {
-			const date = reader.readUint32();
+			const date = sync.toServ(reader.readUint32());
 			if (date === 0)
 				break;
 
@@ -97,7 +90,7 @@ export class ServerGameEngine {
 			content: null
 		});
 
-		
+
 		// # Append them #
 		const inputs = this.inputs;
 
@@ -138,8 +131,8 @@ export class ServerGameEngine {
 		let i = 0;
 		for (; i < inputLengthLimit; i++) {
 			const current = inputs[i];
-			const next = inputs[i+1];
-			
+			const next = inputs[i + 1];
+
 			if (next.leftFlag) {
 				break;
 			}
@@ -160,14 +153,14 @@ export class ServerGameEngine {
 
 	}
 
-	private writeInputs(writer: DataWriter) {
-		const length = this.inputs.reduce((acc, i) => acc + (i.content?1:0), 0);
+	private writeInputs(writer: DataWriter, sync: TimeSyncInterface) {
+		const length = this.inputs.reduce((acc, i) => acc + (i.content ? 1 : 0), 0);
 
 		writer.writeUint32(length);
 
 		for (let input of this.inputs) {
 			if (input.content) {
-				writer.writeUint32(input.date);
+				writer.writeUint32(sync.toClient(input.date));
 				writer.writeUint16(input.content.byteLength);
 				writer.writeUint16(input.user);
 				writer.addArrayBuffer(input.content);
@@ -193,26 +186,27 @@ export class ServerGameEngine {
 
 		// Collect inputs
 		this.appendInputs(reader, user, clientDate);
-		
+
 		if (this.dead)
 			return null;
 
-		this.update(~(1<<user));
+		this.update(~(1 << user));
 
 		// Send data
 		writer.writeInt8(CLIENT_IDS.GAME_DATA);
 		writer.writeUint32(getTimestamp());
 		this.object.writeNetworkDesc(this.snapshot, writer);
 
-		writer.writeUint32(this.inputs[0].date);
-		this.writeInputs(writer);
-		
+		const sync = this.syncs[user];
+		writer.writeUint32(sync.toClient(this.inputs[0].date));
+		this.writeInputs(writer, sync);
+
 		writer.writeInt8(CLIENT_IDS.FINISH);
 		return writer;
 	}
 
 	disconnectPlayer(user: number) {
-		const flag = ~(1<<user);
+		const flag = ~(1 << user);
 		this.startFlag &= flag;
 		this.update(flag);
 	}

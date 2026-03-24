@@ -6,6 +6,7 @@ import { ClientGameEngine } from "./ClientGameEngine";
 import { ImageLoader } from "./ImageLoader";
 import { CLIENT_DESCRIPTIONS } from "./clientGameList";
 import {} from "./windowScope"
+import { getTimestamp } from "../getTimestamp";
 
 
 let socket: WebSocket | null = null;
@@ -107,9 +108,14 @@ function handleMessage(data: ArrayBuffer) {
 			handleGameData(reader);
 			break;
 
+		case CLIENT_IDS.SYNC:
+			handleSync();
+			break;
+
 		case CLIENT_IDS.END_GAME:
 			handleEndGame(reader);
 			break;
+			
 
 		default:
 			console.warn("Unknown message ID:", messageId);
@@ -172,13 +178,13 @@ function handleGameData(reader: DataReader) {
 	if (!globalGameEngine)
 		return;
 
-	const now = Date.now();
+	const now = getTimestamp();
 	const diff = window.FORCED_LATENCY - (now - lastPackageSendTimestamp);
 
 	const bufferToSend = globalGameEngine.handleNetwork(reader).toArrayBuffer();
 	if (diff >= 0) {
 		setTimeout(() => {
-			lastPackageSendTimestamp = Date.now();
+			lastPackageSendTimestamp = getTimestamp();
 			socket?.send(bufferToSend);
 		}, diff);
 	
@@ -188,6 +194,17 @@ function handleGameData(reader: DataReader) {
 	}
 }
 
+function handleSync() {
+	if (!socket)
+		return;
+
+	const now = getTimestamp();
+	const buffer = new DataWriter(6);
+	buffer.writeUint8(SERVER_IDS.SYNC);
+	buffer.writeUint32(now);
+	buffer.writeUint8(SERVER_IDS.FINISH);
+	socket.send(buffer.toArrayBuffer());
+}
 
 function handleSeekLobby(reader: DataReader) {
 	const lobbyHash = reader.read256();
@@ -518,12 +535,12 @@ function startGame() {
 	};
 	window.addEventListener("resize", handleResize);
 	
-	let lastFrameDate = Date.now();
+	let lastFrameDate = getTimestamp();	
 
 	// Game loop
 	function gameLoop() {
 		// Collect inputs and run frame
-		const now = Date.now();
+		const now = getTimestamp();
 		gameEngine.runFrame(now - lastFrameDate);
 		lastFrameDate = now;
 

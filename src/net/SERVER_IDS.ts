@@ -25,6 +25,11 @@ export enum SERVER_IDS {
 	GAME_DATA,
 
 	/**
+	 * uint32: date
+	 */
+	SYNC,
+
+	/**
 	 * No extra data
 	 */
 	FINISH

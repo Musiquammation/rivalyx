@@ -12,6 +12,7 @@ import { CLIENT_IDS } from "../net/CLIENT_IDS";
 import { SERVER_IDS } from "../net/SERVER_IDS";
 import { SERV_DESCRIPTIONS } from "./servGameList";
 import { ServerGameEngine } from "./ServerGameEngine";
+import { TimeSync, TimeSyncBuilder } from "./TimeSync";
 
 const PORT = Number(process.env.PORT);
 
@@ -26,6 +27,7 @@ if (Number(process.env.USE_HTTPS) === 0) {
 	server = http.createServer((req, res) => {
 		res.writeHead(200);
 	});
+
 } else {
 	if (process.env.SSL_KEY_PATH === undefined || process.env.SSL_CERT_PATH === undefined) {
 		throw new Error("SSL_KEY_PATH and/or SSL_CERT_PATH are not defined");
@@ -39,7 +41,6 @@ if (Number(process.env.USE_HTTPS) === 0) {
 	server = https.createServer(options, (req, res) => {
 		res.writeHead(200);
 	});
-
 }
 
 
@@ -51,6 +52,7 @@ interface Player {
 	socket: WebSocket;
 	index: number;
 	session: Session | null;
+	sync: TimeSync | TimeSyncBuilder;
 }
 
 function appendPlayerSession(player: Player, session: Session, index: number) {
@@ -64,8 +66,13 @@ function appendPlayerSession(player: Player, session: Session, index: number) {
 
 
 wss.on("connection", (socket: WebSocket) => {
-	const player: Player = {socket, index: -1, session: null};
-
+	const sync = new TimeSyncBuilder();
+	const player: Player = {
+		socket,
+		index: -1,
+		session: null,
+		sync
+	};
 
 	socket.on("message", (data: Buffer) => {
 		handleMessage(socket, data, player);
@@ -76,6 +83,13 @@ wss.on("connection", (socket: WebSocket) => {
 		removeClientFromLobbies(socket);
 		removeClientFromSessions(player);
 	});
+
+	// Start sync
+	sync.markFirstStart();
+	const firstSyncMessage = new DataWriter(2);
+	firstSyncMessage.writeUint8(CLIENT_IDS.SYNC);
+	firstSyncMessage.writeUint8(CLIENT_IDS.FINISH);
+	socket.send(firstSyncMessage.toArrayBuffer());
 });
 
 
@@ -168,6 +182,10 @@ function handleMessage(socket: WebSocket, data: Buffer, player: Player) {
 		case SERVER_IDS.SEEK_LOBBY:
 			handleSeekLobby(reader, player);
 			break;
+		
+		case SERVER_IDS.SYNC:
+			handleSync(reader, player, socket);
+			break;
 			
 		case SERVER_IDS.GAME_DATA:
 			continueWhileTrue = handleGameData(reader, player);
@@ -206,7 +224,10 @@ function handleCreateLobby(reader: DataReader, player: Player) {
 		writer.writeInt32(-1);
 		writer.writeInt32(CLIENT_IDS.FINISH);
 		
-		const engine = new ServerGameEngine(SERV_DESCRIPTIONS[gameId]);
+		const engine = new ServerGameEngine(
+			SERV_DESCRIPTIONS[gameId],
+			[player.sync]
+		);
 		const session = new Session(engine, [player], hash);
 		sessions.push(session);
 
@@ -279,7 +300,10 @@ function handleLobbyJoin(reader: DataReader, player: Player) {
 			lobby.players[i].socket.send(sharedArrayBuffer);
 		}
 
-		const engine = new ServerGameEngine(gameDesc);
+		const engine = new ServerGameEngine(
+			gameDesc,
+			lobby.players.map(p => p.sync)
+		);
 
 		const session = new Session(engine, lobby.players, lobby.hash);
 		sessions.push(session);
@@ -321,6 +345,25 @@ function handleSeekLobby(reader: DataReader, player: Player) {
 	writer.writeInt32(lobby ? lobby.gameId : -1);
 	writer.writeUint8(CLIENT_IDS.FINISH);
 	player.socket.send(writer.toArrayBuffer());
+}
+
+function handleSync(reader: DataReader, player: Player, socket: WebSocket) {
+	const date = reader.readUint32();
+	if (!(player.sync instanceof TimeSyncBuilder)) {
+		console.error("Sync should be TimeSyncBuilder")
+		return;
+	}
+
+	const u = player.sync.append(date);
+	if (u) {
+		player.sync = u;
+		return;
+	}
+
+	const firstSyncMessage = new DataWriter(2);
+	firstSyncMessage.writeUint8(CLIENT_IDS.SYNC);
+	firstSyncMessage.writeUint8(CLIENT_IDS.FINISH);
+	socket.send(firstSyncMessage.toArrayBuffer());
 
 }
 

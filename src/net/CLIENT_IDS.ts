@@ -37,5 +37,10 @@ export enum CLIENT_IDS {
 	/**
 	 * No extra data
 	 */
+	SYNC,
+
+	/**
+	 * No extra data
+	 */
 	FINISH
 }
