@@ -2,7 +2,7 @@ import { DataReader } from "../net/DataReader";
 import { DataWriter } from "../net/DataWriter";
 import { GameInterface } from "../GameInterface";
 import { CLIENT_IDS } from "../net/CLIENT_IDS";
-import { getTimestamp, TIME_PRECISION } from "./getTimestamp";
+import { getTimestamp, TIME_PRECISION } from "../getTimestamp";
 import { TimeSyncInterface } from "./TimeSync";
 
 

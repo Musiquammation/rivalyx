@@ -4,7 +4,7 @@ import { DataWriter } from "../net/DataWriter";
 import { SERVER_IDS } from "../net/SERVER_IDS";
 import { Button, ButtonPlacement } from "./Button";
 import { ClientInterface } from "./ClientInterface";
-import { getTimestamp, TIME_PRECISION } from "./getTimestamp";
+import { getTimestamp, TIME_PRECISION } from "../getTimestamp";
 import { ImageLoader } from "./ImageLoader";
 import { Joystick, JoystickPlacement } from "./Joystick";
 

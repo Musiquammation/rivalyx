@@ -1,4 +1,4 @@
-import { getTimestamp } from "./getTimestamp";
+import { getTimestamp } from "../getTimestamp";
 import { CLIENT_IDS } from "../net/CLIENT_IDS";
 import { DataWriter } from "../net/DataWriter";
 
