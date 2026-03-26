@@ -61,6 +61,9 @@
       this.offset += length;
       return new Uint8Array(array);
     }
+    getLength() {
+      return this.view.byteLength;
+    }
   }
   class DataWriter {
     constructor(size = 64) {
@@ -223,7 +226,8 @@
     CLIENT_IDS2[CLIENT_IDS2["SEEK_LOBBY"] = 3] = "SEEK_LOBBY";
     CLIENT_IDS2[CLIENT_IDS2["GAME_DATA"] = 4] = "GAME_DATA";
     CLIENT_IDS2[CLIENT_IDS2["END_GAME"] = 5] = "END_GAME";
-    CLIENT_IDS2[CLIENT_IDS2["FINISH"] = 6] = "FINISH";
+    CLIENT_IDS2[CLIENT_IDS2["SYNC"] = 6] = "SYNC";
+    CLIENT_IDS2[CLIENT_IDS2["FINISH"] = 7] = "FINISH";
     return CLIENT_IDS2;
   })(CLIENT_IDS || {});
   var SERVER_IDS = /* @__PURE__ */ ((SERVER_IDS2) => {
@@ -232,12 +236,10 @@
     SERVER_IDS2[SERVER_IDS2["JOIN_LOBBY"] = 2] = "JOIN_LOBBY";
     SERVER_IDS2[SERVER_IDS2["SEEK_LOBBY"] = 3] = "SEEK_LOBBY";
     SERVER_IDS2[SERVER_IDS2["GAME_DATA"] = 4] = "GAME_DATA";
-    SERVER_IDS2[SERVER_IDS2["FINISH"] = 5] = "FINISH";
+    SERVER_IDS2[SERVER_IDS2["SYNC"] = 5] = "SYNC";
+    SERVER_IDS2[SERVER_IDS2["FINISH"] = 6] = "FINISH";
     return SERVER_IDS2;
   })(SERVER_IDS || {});
-  function getTimestamp() {
-    return Date.now() >>> 0;
-  }
   var ButtonPlacement = /* @__PURE__ */ ((ButtonPlacement2) => {
     ButtonPlacement2[ButtonPlacement2["CENTERED"] = 0] = "CENTERED";
     ButtonPlacement2[ButtonPlacement2["SCREEN_RATIO"] = 1] = "SCREEN_RATIO";
@@ -272,6 +274,10 @@
   };
   _Button.FACTOR = 0.05;
   let Button = _Button;
+  const TIME_PRECISION = 10;
+  function getTimestamp() {
+    return Math.floor(performance.now() * TIME_PRECISION) >>> 0;
+  }
   var JoystickPlacement = /* @__PURE__ */ ((JoystickPlacement2) => {
     JoystickPlacement2[JoystickPlacement2["CENTERED"] = 0] = "CENTERED";
     JoystickPlacement2[JoystickPlacement2["SCREEN_RATIO"] = 1] = "SCREEN_RATIO";
@@ -418,6 +424,7 @@
       return l;
     }
     runFrame(duration) {
+      duration /= TIME_PRECISION;
       while (duration >= MAX_FRAME_DURATION) {
         this.object.game.frame(this.snapshot, MAX_FRAME_DURATION);
         duration -= MAX_FRAME_DURATION;
@@ -750,6 +757,38 @@
           y = button.y;
       }
       return { x, y };
+    }
+    handleGamepad(gamepad) {
+      for (const button of this.buttons) {
+        for (const key of button.keys) {
+          const match = key.match(/^Controller(\d+)$/);
+          if (!match) continue;
+          const buttonIndex = parseInt(match[1]);
+          if (buttonIndex >= gamepad.buttons.length) continue;
+          const pressed = gamepad.buttons[buttonIndex].pressed;
+          const alreadyPressed = button.pressedKeys.indexOf(key) >= 0;
+          if (pressed && !alreadyPressed) {
+            button.pressedKeys.push(key);
+          } else if (!pressed && alreadyPressed) {
+            button.pressedKeys = button.pressedKeys.filter((x) => x !== key);
+          }
+        }
+      }
+      let i = 0;
+      for (const joystick of this.joysticks) {
+        const axisX = 2 * i;
+        const axisY = 2 * i + 1;
+        i++;
+        if (axisX >= gamepad.axes.length || axisY >= gamepad.axes.length) continue;
+        const hasKeyboardInput = joystick.pressedKeys.length > 0;
+        const hasTouchInput = joystick.activeTouchId !== void 0;
+        if (hasKeyboardInput || hasTouchInput) continue;
+        const x = gamepad.axes[axisX];
+        const y = gamepad.axes[axisY];
+        const deadzone = 0.1;
+        joystick.stickX = Math.abs(x) > deadzone ? x : 0;
+        joystick.stickY = Math.abs(y) > deadzone ? y : 0;
+      }
     }
     drawJoysticks(ctx, screenArea) {
       if (!this.canvas) return;
@@ -2065,7 +2104,7 @@
         "jump",
         1,
         1,
-        ["KeyW"]
+        ["KeyW", "Controller2", "Controller3"]
       ));
       client.appendButton(new Button(
         0.1,
@@ -2076,7 +2115,7 @@
         "powerup",
         1,
         1,
-        ["Space"]
+        ["Space", "Controller0", "Controller1"]
       ));
       return new Memory();
     },
@@ -2388,10 +2427,11 @@
           snapshot.killPlayer(i);
         }
       }
+      const intSpeed = Math.floor(speed);
       for (let i = 0; i < snapshot.tiles.length; i++) {
         const tile = snapshot.tiles[i];
         if (tile > 0 && tile % TILE_MODULO !== 0) {
-          snapshot.tiles[i] = Math.max(tile - speed, Math.floor(tile / TILE_MODULO) * TILE_MODULO);
+          snapshot.tiles[i] = Math.max(tile - intSpeed, Math.floor(tile / TILE_MODULO) * TILE_MODULO);
         }
       }
       snapshot.frame += speed;
@@ -2778,6 +2818,9 @@
         case CLIENT_IDS.GAME_DATA:
           handleGameData(reader);
           break;
+        case CLIENT_IDS.SYNC:
+          handleSync();
+          break;
         case CLIENT_IDS.END_GAME:
           handleEndGame(reader);
           break;
@@ -2825,18 +2868,28 @@
   function handleGameData(reader) {
     if (!globalGameEngine)
       return;
-    const now = Date.now();
+    const now = getTimestamp();
     const diff = window.FORCED_LATENCY - (now - lastPackageSendTimestamp);
     const bufferToSend = globalGameEngine.handleNetwork(reader).toArrayBuffer();
     if (diff >= 0) {
       setTimeout(() => {
-        lastPackageSendTimestamp = Date.now();
+        lastPackageSendTimestamp = getTimestamp();
         socket?.send(bufferToSend);
       }, diff);
     } else if (globalGameEngine && socket) {
       socket.send(bufferToSend);
       lastPackageSendTimestamp = now;
     }
+  }
+  function handleSync() {
+    if (!socket)
+      return;
+    const now = getTimestamp();
+    const buffer = new DataWriter(6);
+    buffer.writeUint8(SERVER_IDS.SYNC);
+    buffer.writeUint32(now);
+    buffer.writeUint8(SERVER_IDS.FINISH);
+    socket.send(buffer.toArrayBuffer());
   }
   function handleSeekLobby(reader) {
     const lobbyHash = reader.read256();
@@ -3082,9 +3135,18 @@
       gameCanvas.height = window.innerHeight;
     };
     window.addEventListener("resize", handleResize);
-    let lastFrameDate = Date.now();
+    window.addEventListener("gamepadconnected", (e) => {
+      console.log("Gamepad connected:", e.gamepad);
+    });
+    window.addEventListener("gamepaddisconnected", (e) => {
+      console.log("Gamepad disconnected:", e.gamepad);
+    });
+    let lastFrameDate = getTimestamp();
     function gameLoop() {
-      const now = Date.now();
+      const now = getTimestamp();
+      const gamepad = navigator.getGamepads()[0];
+      if (gamepad)
+        gameEngine.handleGamepad(gamepad);
       gameEngine.runFrame(now - lastFrameDate);
       lastFrameDate = now;
       const screenArea = Math.sqrt(
