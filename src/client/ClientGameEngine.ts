@@ -567,6 +567,59 @@ export class ClientGameEngine {
 		return { x, y };
 	}
 
+
+	handleGamepad(gamepad: Gamepad) {
+		// Handle buttons: "Controller0", "Controller1", etc.
+		for (const button of this.buttons) {
+			for (const key of button.keys) {
+				const match = key.match(/^Controller(\d+)$/);
+				if (!match) continue;
+
+				const buttonIndex = parseInt(match[1]);
+				if (buttonIndex >= gamepad.buttons.length) continue;
+
+				const pressed = gamepad.buttons[buttonIndex].pressed;
+				const alreadyPressed = button.pressedKeys.indexOf(key) >= 0;
+
+				if (pressed && !alreadyPressed) {
+					button.pressedKeys.push(key);
+				} else if (!pressed && alreadyPressed) {
+					button.pressedKeys = button.pressedKeys.filter(x => x !== key);
+				}
+			}
+		}
+
+		// Handle joysticks: axes [2i, 2i+1] for the i-th joystick
+		// Priority: keyboard > touch screen > gamepad
+		let i = 0;
+		for (const joystick of this.joysticks) {
+			const axisX = 2 * i;
+			const axisY = 2 * i + 1;
+			i++;
+
+			if (axisX >= gamepad.axes.length || axisY >= gamepad.axes.length) continue;
+
+			// Skip if keyboard or touch has priority
+			const hasKeyboardInput = joystick.pressedKeys.length > 0;
+			const hasTouchInput = joystick.activeTouchId !== undefined;
+
+			if (hasKeyboardInput || hasTouchInput) continue;
+
+			const x = gamepad.axes[axisX];
+			const y = gamepad.axes[axisY];
+
+			// Apply deadzone
+			const deadzone = 0.1;
+			joystick.stickX = Math.abs(x) > deadzone ? x : 0;
+			joystick.stickY = Math.abs(y) > deadzone ? y : 0;
+		}
+	}
+
+
+
+
+
+
 	drawJoysticks(ctx: CanvasRenderingContext2D, screenArea: number) {
 		if (!this.canvas) return;
 		

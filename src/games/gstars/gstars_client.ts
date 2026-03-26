@@ -72,13 +72,13 @@ export const gstars_client: ClientInterface<Snapshot, Memory> = {
 		client.appendButton(new Button(
 			0.1, 0.9, ButtonPlacement.SCREEN_RATIO, ButtonPlacement.SCREEN_RATIO,
 			playerIndex === 0 ? BUTTON_COLORS.red : BUTTON_COLORS.blue,
-			'jump', 1, 1, ['KeyW']
+			'jump', 1, 1, ['KeyW', 'Controller2', 'Controller3']
 		));
 
 		client.appendButton(new Button(
 			0.1, 0.8, ButtonPlacement.SCREEN_RATIO, ButtonPlacement.SCREEN_RATIO,
 			BUTTON_COLORS.yellow,
-			'powerup', 1, 1, ['Space']
+			'powerup', 1, 1, ['Space', 'Controller0', 'Controller1']
 		));
 
 		

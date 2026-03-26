@@ -534,6 +534,14 @@ function startGame() {
 		gameCanvas.height = window.innerHeight;
 	};
 	window.addEventListener("resize", handleResize);
+
+	window.addEventListener("gamepadconnected", (e) => {
+		console.log("Gamepad connected:", e.gamepad);
+	});
+
+	window.addEventListener("gamepaddisconnected", (e) => {
+		console.log("Gamepad disconnected:", e.gamepad);
+	});
 	
 	let lastFrameDate = getTimestamp();	
 
@@ -541,6 +549,11 @@ function startGame() {
 	function gameLoop() {
 		// Collect inputs and run frame
 		const now = getTimestamp();
+
+		const gamepad = navigator.getGamepads()[0];
+		if (gamepad)
+			gameEngine.handleGamepad(gamepad);
+
 		gameEngine.runFrame(now - lastFrameDate);
 		lastFrameDate = now;
 
